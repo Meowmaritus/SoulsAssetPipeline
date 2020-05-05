@@ -37,12 +37,12 @@ namespace SFAnimExtensions
         public HKXVariation Variation = HKXVariation.HKXDS3;
         public bool DeserializeObjects = true;
 
-        internal override bool Is(BinaryReaderEx br)
+        protected override bool Is(BinaryReaderEx br)
         {
             return (br.ReadUInt32() == 0x57E0E057);
         }
 
-        internal override void Read(BinaryReaderEx br)
+        protected override void Read(BinaryReaderEx br)
         {
             br.BigEndian = false;
 
@@ -146,7 +146,7 @@ namespace SFAnimExtensions
             return Read(data, HKXVariation.HKXDS3, deserializeObjects);
         }
 
-        internal override void Write(BinaryWriterEx bw)
+        protected override void Write(BinaryWriterEx bw)
         {
             bw.BigEndian = (Header.Endian == 0) ? true : false;
             bw.WriteUInt32(Header.Magic0);
