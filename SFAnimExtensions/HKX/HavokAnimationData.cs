@@ -15,6 +15,18 @@ namespace SFAnimExtensions.Havok
         public Vector3 Scale;
         public Quaternion Rotation;
 
+        public NewBlendableTransform(Matrix4x4 matrix) : this()
+        {
+            ComposedMatrix = matrix;
+            
+            if (!Matrix4x4.Decompose(matrix, out Scale, out Rotation, out Translation))
+            {
+                var ex = new ArgumentException($"{nameof(matrix)} can't be decomposed", nameof(matrix));
+                ex.Data.Add("matrix", matrix);
+                throw ex;
+            }
+        }
+
         public static NewBlendableTransform Identity => new NewBlendableTransform()
         {
             Translation = Vector3.Zero,
