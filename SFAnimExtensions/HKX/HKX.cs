@@ -119,7 +119,8 @@ namespace SFAnimExtensions
                 HKX file = new HKX();
                 file.Variation = variation;
                 file.DeserializeObjects = deserializeObjects;
-                br = SFUtil.GetDecompressedBR(br, out file.Compression);
+                br = SFUtil.GetDecompressedBR(br, out DCX.Type fileCompression);
+                file.Compression = fileCompression;
                 file.Read(br);
                 return file;
             }
@@ -131,7 +132,8 @@ namespace SFAnimExtensions
             HKX file = new HKX();
             file.Variation = variation;
             file.DeserializeObjects = deserializeObjects;
-            br = SFUtil.GetDecompressedBR(br, out file.Compression);
+            br = SFUtil.GetDecompressedBR(br, out DCX.Type fileCompression);
+            file.Compression = fileCompression;
             file.Read(br);
             return file;
         }
