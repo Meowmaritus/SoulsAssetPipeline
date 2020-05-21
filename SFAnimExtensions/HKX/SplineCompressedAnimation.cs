@@ -696,7 +696,7 @@ namespace SFAnimExtensions.Havok
                         NewBlendableTransform currentFrame = GetTransformOnSpecificBlockAndFrame(t,
                             block: currentBlock, frame: (float)Math.Floor(frame));
                         NewBlendableTransform nextFrame = GetTransformOnSpecificBlockAndFrame(t, block: 0, frame: 0);
-                        currentFrame = NewBlendableTransform.Lerp(frame % 1, currentFrame, nextFrame);
+                        currentFrame = NewBlendableTransform.Lerp(currentFrame, nextFrame, frame % 1);
                         resultList.Add(currentFrame);
                     }
                     // Regular frame

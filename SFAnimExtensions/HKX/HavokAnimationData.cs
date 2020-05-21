@@ -15,6 +15,56 @@ namespace SFAnimExtensions.Havok
         public Vector3 Scale;
         public Quaternion Rotation;
 
+        public static NewBlendableTransform operator *(NewBlendableTransform a, float b)
+        {
+            return new NewBlendableTransform()
+            {
+                Translation = a.Translation * b,
+                Rotation = new Quaternion(a.Rotation.X * b, a.Rotation.Y * b, a.Rotation.Z * b, a.Rotation.W * b),
+                Scale = a.Scale * b,
+            };
+        }
+
+        public static NewBlendableTransform operator /(NewBlendableTransform a, float b)
+        {
+            return new NewBlendableTransform()
+            {
+                Translation = a.Translation / b,
+                Rotation = new Quaternion(a.Rotation.X / b, a.Rotation.Y / b, a.Rotation.Z / b, a.Rotation.W / b),
+                Scale = a.Scale / b,
+            };
+        }
+
+        public static NewBlendableTransform operator *(NewBlendableTransform a, NewBlendableTransform b)
+        {
+            return new NewBlendableTransform()
+            {
+                Translation = a.Translation + b.Translation,
+                Rotation = a.Rotation * b.Rotation,
+                Scale = a.Scale * b.Scale,
+            };
+        }
+
+        public static NewBlendableTransform operator /(NewBlendableTransform a, NewBlendableTransform b)
+        {
+            return new NewBlendableTransform()
+            {
+                Translation = a.Translation - b.Translation,
+                Rotation = a.Rotation / b.Rotation,
+                Scale = a.Scale / b.Scale,
+            };
+        }
+
+        public static NewBlendableTransform operator +(NewBlendableTransform a, NewBlendableTransform b)
+        {
+            return new NewBlendableTransform()
+            {
+                Translation = a.Translation + b.Translation,
+                Rotation = a.Rotation + b.Rotation,
+                Scale = a.Scale + b.Scale,
+            };
+        }
+
         public NewBlendableTransform(Matrix4x4 matrix) : this()
         {
             ComposedMatrix = matrix;
@@ -36,13 +86,13 @@ namespace SFAnimExtensions.Havok
             ComposedMatrix = Matrix4x4.Identity,
         };
 
-        public static NewBlendableTransform Lerp(float lerp, NewBlendableTransform a, NewBlendableTransform b)
+        public static NewBlendableTransform Lerp(NewBlendableTransform a, NewBlendableTransform b, float s)
         {
             return new NewBlendableTransform()
             {
-                Translation = Vector3.Lerp(a.Translation, b.Translation, lerp),
-                Scale = Vector3.Lerp(a.Scale, b.Scale, lerp),
-                Rotation = Quaternion.Lerp(a.Rotation, b.Rotation, lerp),
+                Translation = Vector3.Lerp(a.Translation, b.Translation, s),
+                Scale = Vector3.Lerp(a.Scale, b.Scale, s),
+                Rotation = Quaternion.Slerp(a.Rotation, b.Rotation, s),
             };
         }
 
@@ -134,7 +184,7 @@ namespace SFAnimExtensions.Havok
             FrameDuration = anim.FrameDuration;
 
             BlockCount = anim.BlockCount;
-            NumFramesPerBlock = anim.FramesPerBlock - 1;
+            NumFramesPerBlock = anim.FramesPerBlock;
 
             HkxBoneIndexToTransformTrackMap = new int[skeleton.Bones.Size];
             TransformTrackIndexToHkxBoneMap = new int[binding.TransformTrackToBoneIndices.Size];
@@ -173,12 +223,15 @@ namespace SFAnimExtensions.Havok
 
         public int GetBlock(float frame)
         {
-            return (int)((frame % FrameCount) / NumFramesPerBlock);
+            return (int)((frame % (FrameCount - 1)) / (NumFramesPerBlock - 1));
         }
 
         private NewBlendableTransform GetTransformOnSpecificBlockAndFrame(int transformIndex, int block, float frame)
         {
-            frame = (frame % FrameCount) % NumFramesPerBlock;
+            if (frame < 0)
+                throw new InvalidOperationException("Spline Compressed Animations cannot sample before frame 0.");
+
+            frame = (frame % (FrameCount - 1)) % (NumFramesPerBlock - 1);
 
             NewBlendableTransform result = NewBlendableTransform.Identity;
             var track = Tracks[block][transformIndex];
@@ -349,7 +402,7 @@ namespace SFAnimExtensions.Havok
 
             int blockIndex = GetBlock(frame);
 
-            float frameInBlock = (frame % (FrameCount - 1)) % NumFramesPerBlock;
+            float frameInBlock = (frame % (FrameCount - 1)) % (NumFramesPerBlock - 1);
 
             NewBlendableTransform currentFrame = GetTransformOnSpecificBlockAndFrame(track,
                     block: blockIndex, frame);
@@ -455,8 +508,8 @@ namespace SFAnimExtensions.Havok
             float loopedFrame = frame % (FrameCount - 1);
 
             NewBlendableTransform currentFrame = GetTransformOnFrame((int)Math.Floor(loopedFrame), track);
-            NewBlendableTransform nextFrame = GetTransformOnFrame((loopedFrame >= FrameCount - 2) ? 0 : (int)(Math.Ceiling(loopedFrame)), track);
-            return NewBlendableTransform.Lerp(loopedFrame % 1, currentFrame, nextFrame);
+            NewBlendableTransform nextFrame = GetTransformOnFrame((int)Math.Ceiling(loopedFrame), track);
+            return NewBlendableTransform.Lerp(currentFrame, nextFrame, loopedFrame % 1);
         }
 
         public NewBlendableTransform GetTransformOnFrame(int frame, int trackIndex)
