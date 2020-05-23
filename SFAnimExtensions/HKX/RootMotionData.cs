@@ -45,6 +45,8 @@ namespace SFAnimExtensions.Havok
 
         public Vector4 GetSampleOnExactFrame(int frame)
         {
+            if (frame < 0)
+                frame = 0;
             int frameDataIndex = frame % (Frames.Length - 1);
             int loopIndex = frame / (Frames.Length - 1);
             return Frames[frameDataIndex] + (Frames[Frames.Length - 1] * loopIndex);
