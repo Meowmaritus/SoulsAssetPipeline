@@ -154,6 +154,11 @@ namespace SFAnimExtensions.Havok
         public float FrameDuration;
         public int FrameCount;
 
+        // Index into array = hkx bone index, result = transform track index.
+        public int[] HkxBoneIndexToTransformTrackMap;
+
+        public int[] TransformTrackIndexToHkxBoneMap;
+
         public HavokAnimationData(string Name, HKX.HKASkeleton skeleton, HKX.HKADefaultAnimatedReferenceFrame refFrame, HKX.HKAAnimationBinding binding)
         {
             this.Name = Name;
@@ -213,11 +218,6 @@ namespace SFAnimExtensions.Havok
 
         public List<SplineCompressedAnimation.TransformTrack[]> Tracks;
 
-        // Index into array = hkx bone index, result = transform track index.
-        public int[] HkxBoneIndexToTransformTrackMap;
-
-        public int[] TransformTrackIndexToHkxBoneMap;
-
         public int BlockCount = 1;
         public int NumFramesPerBlock = 255;
 
@@ -273,12 +273,12 @@ namespace SFAnimExtensions.Havok
                     result.Scale.Z = IsAdditiveBlend ? 1 : skeleTransform.Scale.Vector.Z;
             }
 
-            if (IsAdditiveBlend)
-            {
-                result.Scale.X *= skeleTransform.Scale.Vector.X;
-                result.Scale.Y *= skeleTransform.Scale.Vector.Y;
-                result.Scale.Z *= skeleTransform.Scale.Vector.Z;
-            }
+            //if (IsAdditiveBlend)
+            //{
+            //    result.Scale.X *= skeleTransform.Scale.Vector.X;
+            //    result.Scale.Y *= skeleTransform.Scale.Vector.Y;
+            //    result.Scale.Z *= skeleTransform.Scale.Vector.Z;
+            //}
 
             //if (result.Scale.LengthSquared() > (Vector3.One * 1.1f).LengthSquared())
             //{
@@ -296,6 +296,7 @@ namespace SFAnimExtensions.Havok
             }
             else
             {
+                result.Rotation = Quaternion.Identity;
                 //result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
                 //    skeleTransform.Rotation.Vector.X,
                 //    skeleTransform.Rotation.Vector.Y,
@@ -303,14 +304,14 @@ namespace SFAnimExtensions.Havok
                 //    skeleTransform.Rotation.Vector.W);
             }
 
-            if (IsAdditiveBlend)
-            {
-                result.Rotation = new Quaternion(
-                    skeleTransform.Rotation.Vector.X,
-                    skeleTransform.Rotation.Vector.Y,
-                    skeleTransform.Rotation.Vector.Z,
-                    skeleTransform.Rotation.Vector.W) * result.Rotation;
-            }
+            //if (IsAdditiveBlend)
+            //{
+            //    result.Rotation = new Quaternion(
+            //        skeleTransform.Rotation.Vector.X,
+            //        skeleTransform.Rotation.Vector.Y,
+            //        skeleTransform.Rotation.Vector.Z,
+            //        skeleTransform.Rotation.Vector.W) * result.Rotation;
+            //}
 
             if (track.SplinePosition != null)
             {
@@ -332,13 +333,13 @@ namespace SFAnimExtensions.Havok
 
                 if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticY))
                     result.Translation.Y = track.StaticPosition.Y;
-                else
-                    result.Translation.Y = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y;
+                //else
+                //    result.Translation.Y = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y;
 
                 if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticZ))
                     result.Translation.Z = track.StaticPosition.Z;
-                else
-                    result.Translation.Z = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z;
+                //else
+                //    result.Translation.Z = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z;
             }
 
             //result.Translation.X = track.SplinePosition?.GetValueX(frame) ?? (IsAdditiveBlend ? 0 : track.StaticPosition.X);
@@ -363,12 +364,12 @@ namespace SFAnimExtensions.Havok
             //    result.Translation.Z = skeleTransform.Position.Vector.Z;
             //}
 
-            if (IsAdditiveBlend)
-            {
-                result.Translation.X += skeleTransform.Position.Vector.X;
-                result.Translation.Y += skeleTransform.Position.Vector.Y;
-                result.Translation.Z += skeleTransform.Position.Vector.Z;
-            }
+            //if (IsAdditiveBlend)
+            //{
+            //    result.Translation.X += skeleTransform.Position.Vector.X;
+            //    result.Translation.Y += skeleTransform.Position.Vector.Y;
+            //    result.Translation.Z += skeleTransform.Position.Vector.Z;
+            //}
 
             return result;
         }
@@ -429,9 +430,6 @@ namespace SFAnimExtensions.Havok
     public class HavokAnimationData_InterleavedUncompressed : HavokAnimationData
     {
         public int TransformTrackCount { get; }
-        // Index into array = hkx bone index, result = transform track index.
-        public int[] HkxBoneIndexToTransformTrackMap { get; }
-        public int[] TransformTrackIndexToHkxBoneMap { get; }
         public List<NewBlendableTransform> Transforms { get; }
 
         public HavokAnimationData_InterleavedUncompressed(string name, HKX.HKASkeleton skeleton,

@@ -343,8 +343,13 @@ namespace SFAnimExtensions.Havok
 
             Quaternion retVal = new Quaternion(Vector3.Zero, 0.0f);
 
-            for (int i = 0; i <= degree; i++)
-                retVal += cPoints[knotSpanIndex - i] * N[i];
+            if (knotSpanIndex > 0)
+            {
+                for (int i = 0; i <= degree; i++)
+                    retVal += cPoints[knotSpanIndex - i] * N[i];
+            }
+
+        
 
             return retVal;
         }
