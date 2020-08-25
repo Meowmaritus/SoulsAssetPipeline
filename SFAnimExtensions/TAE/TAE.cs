@@ -510,10 +510,10 @@ namespace SFAnimExtensions
                         var newClone = new Standard();
 
                         newClone.IsLoopByDefault = IsLoopByDefault;
-                        newClone.ImportsEvents = ImportsEvents;
+                        newClone.AllowDelayLoad = AllowDelayLoad;
                         newClone.ImportsHKX = ImportsHKX;
 
-                        newClone.ImportFromAnimID = ImportFromAnimID;
+                        newClone.ImportHKXSourceAnimID = ImportHKXSourceAnimID;
 
                         return newClone;
                     }
@@ -525,39 +525,39 @@ namespace SFAnimExtensions
                     public bool IsLoopByDefault { get; set; } = false;
 
                     /// <summary>
-                    /// Whether to import the HKX (actual motion data) of the animation with the ID of <see cref="ImportFromAnimID"/>.
+                    /// Whether to import the HKX (actual motion data) of the animation with the ID of <see cref="ImportHKXSourceAnimID"/>.
                     /// </summary>
                     public bool ImportsHKX { get; set; } = false;
 
                     /// <summary>
-                    /// Whether to import all events from the animation with the ID of <see cref="ImportFromAnimID"/>.
+                    /// Whether to allow this animation to be loaded from delayload anibnds such as the c0000_cXXXX.anibnd player throw anibnds.
                     /// </summary>
-                    public bool ImportsEvents { get; set; } = false;
+                    public bool AllowDelayLoad { get; set; } = false;
 
                     /// <summary>
-                    /// Anim ID to import things from. Behavior depends on the 
-                    /// <see cref="ImportsHKX"/> and <see cref="ImportsEvents"/> properties.
+                    /// Anim ID to import HKX from. Only functional if
+                    /// <see cref="ImportsHKX"/> is enabled.
                     /// </summary>
-                    public int ImportFromAnimID { get; set; } = 0;
+                    public int ImportHKXSourceAnimID { get; set; } = 0;
 
                     internal override void ReadInner(BinaryReaderEx br)
                     {
                         IsLoopByDefault = br.ReadByte() != 0;
                         ImportsHKX = br.ReadByte() != 0;
-                        ImportsEvents = br.ReadByte() != 0;
+                        AllowDelayLoad = br.ReadByte() != 0;
                         br.ReadByte();
 
-                        ImportFromAnimID = br.ReadInt32();
+                        ImportHKXSourceAnimID = br.ReadInt32();
                     }
 
                     internal override void WriteInner(BinaryWriterEx bw)
                     {
                         bw.WriteBoolean(IsLoopByDefault);
                         bw.WriteBoolean(ImportsHKX);
-                        bw.WriteBoolean(ImportsEvents);
+                        bw.WriteBoolean(AllowDelayLoad);
                         bw.WriteByte(0);
 
-                        bw.WriteInt32(ImportFromAnimID);
+                        bw.WriteInt32(ImportHKXSourceAnimID);
                     }
                 }
 

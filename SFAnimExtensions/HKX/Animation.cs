@@ -295,6 +295,7 @@ namespace SFAnimExtensions
                 AssertPointer(hkx, br);
                 AssertPointer(hkx, br);
                 TransformTrackToBoneIndices = new HKArray<HKShort>(hkx, section, this, br, variation);
+                
                 FloatTrackToFloatSlotIndices = new HKArray<HKShort>(hkx, section, this, br, variation);
                 
 
@@ -306,6 +307,11 @@ namespace SFAnimExtensions
                 }
                 else
                 {
+                    // I'm so sorry.
+                    if (variation == HKXVariation.HKXDS1 && hkx.IsDS1RAnimHotfix)
+                    {
+                        br.Position += 12;
+                    }
                     BlendHint = br.ReadEnum32<AnimationBlendHint>();
                     OriginalSkeletonName = br.ReadShiftJIS();
                     br.Pad(16);

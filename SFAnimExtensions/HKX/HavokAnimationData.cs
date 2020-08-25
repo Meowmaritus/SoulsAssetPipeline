@@ -104,7 +104,7 @@ namespace SFAnimExtensions.Havok
         public Matrix4x4 GetMatrix()
         {
             return
-                Matrix4x4.CreateScale(Scale) *
+                
                 Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(Rotation)) *
                 //Matrix4x4.CreateFromQuaternion(Rotation) *
                 Matrix4x4.CreateTranslation(Translation);
@@ -296,12 +296,12 @@ namespace SFAnimExtensions.Havok
             }
             else
             {
-                result.Rotation = Quaternion.Identity;
-                //result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
-                //    skeleTransform.Rotation.Vector.X,
-                //    skeleTransform.Rotation.Vector.Y,
-                //    skeleTransform.Rotation.Vector.Z,
-                //    skeleTransform.Rotation.Vector.W);
+                //result.Rotation = Quaternion.Identity;
+                result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
+                    skeleTransform.Rotation.Vector.X,
+                    skeleTransform.Rotation.Vector.Y,
+                    skeleTransform.Rotation.Vector.Z,
+                    skeleTransform.Rotation.Vector.W);
             }
 
             //if (IsAdditiveBlend)
@@ -333,13 +333,13 @@ namespace SFAnimExtensions.Havok
 
                 if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticY))
                     result.Translation.Y = track.StaticPosition.Y;
-                //else
-                //    result.Translation.Y = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y;
+                else
+                    result.Translation.Y = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y;
 
                 if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticZ))
                     result.Translation.Z = track.StaticPosition.Z;
-                //else
-                //    result.Translation.Z = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z;
+                else
+                    result.Translation.Z = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z;
             }
 
             //result.Translation.X = track.SplinePosition?.GetValueX(frame) ?? (IsAdditiveBlend ? 0 : track.StaticPosition.X);

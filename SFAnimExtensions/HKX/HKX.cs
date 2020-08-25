@@ -34,6 +34,7 @@ namespace SFAnimExtensions
             HKXBloodBorne,
         };
 
+        public bool IsDS1RAnimHotfix = false;
         public HKXVariation Variation = HKXVariation.HKXDS3;
         public bool DeserializeObjects = true;
 
@@ -111,12 +112,13 @@ namespace SFAnimExtensions
             DataSection.ReadDataObjects(this, Variation, DeserializeObjects);
         }
 
-        public static HKX Read(string path, HKXVariation variation, bool deserializeObjects = true)
+        public static HKX Read(string path, HKXVariation variation, bool isDS1RAnimHotfix, bool deserializeObjects = true)
         {
             using (FileStream stream = File.OpenRead(path))
             {
                 BinaryReaderEx br = new BinaryReaderEx(false, stream);
                 HKX file = new HKX();
+                file.IsDS1RAnimHotfix = isDS1RAnimHotfix;
                 file.Variation = variation;
                 file.DeserializeObjects = deserializeObjects;
                 br = SFUtil.GetDecompressedBR(br, out DCX.Type fileCompression);
@@ -126,10 +128,11 @@ namespace SFAnimExtensions
             }
         }
 
-        public static HKX Read(byte[] data, HKXVariation variation, bool deserializeObjects = true)
+        public static HKX Read(byte[] data, HKXVariation variation, bool isDS1RAnimHotfix, bool deserializeObjects = true)
         {
             BinaryReaderEx br = new BinaryReaderEx(false, data);
             HKX file = new HKX();
+            file.IsDS1RAnimHotfix = isDS1RAnimHotfix;
             file.Variation = variation;
             file.DeserializeObjects = deserializeObjects;
             br = SFUtil.GetDecompressedBR(br, out DCX.Type fileCompression);
@@ -138,14 +141,14 @@ namespace SFAnimExtensions
             return file;
         }
 
-        public static HKX Read(string path, bool deserializeObjects = true)
+        public static HKX Read(string path, bool isDS1RAnimHotfix, bool deserializeObjects = true)
         {
-            return Read(path, HKXVariation.HKXDS3, deserializeObjects);
+            return Read(path, HKXVariation.HKXDS3, isDS1RAnimHotfix, deserializeObjects);
         }
 
-        public static HKX Read(byte[] data, bool deserializeObjects = true)
+        public static HKX Read(byte[] data, bool isDS1RAnimHotfix, bool deserializeObjects = true)
         {
-            return Read(data, HKXVariation.HKXDS3, deserializeObjects);
+            return Read(data, HKXVariation.HKXDS3, isDS1RAnimHotfix, deserializeObjects);
         }
 
         protected override void Write(BinaryWriterEx bw)
