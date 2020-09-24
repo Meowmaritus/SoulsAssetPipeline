@@ -296,12 +296,12 @@ namespace SFAnimExtensions.Havok
             }
             else
             {
-                //result.Rotation = Quaternion.Identity;
-                result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
-                    skeleTransform.Rotation.Vector.X,
-                    skeleTransform.Rotation.Vector.Y,
-                    skeleTransform.Rotation.Vector.Z,
-                    skeleTransform.Rotation.Vector.W);
+                result.Rotation = Quaternion.Identity;
+                //result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
+                //    skeleTransform.Rotation.Vector.X,
+                //    skeleTransform.Rotation.Vector.Y,
+                //    skeleTransform.Rotation.Vector.Z,
+                //    skeleTransform.Rotation.Vector.W);
             }
 
             //if (IsAdditiveBlend)

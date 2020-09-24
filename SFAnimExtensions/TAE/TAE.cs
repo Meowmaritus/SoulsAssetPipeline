@@ -1371,7 +1371,15 @@ namespace SFAnimExtensions
                     CopyParametersToBytes(isBigEndian);
                 }
                 Array.Resize(ref ParameterBytes, template.GetAllParametersByteCount());
-                Parameters = new ParameterContainer(isBigEndian, ParameterBytes, template);
+                try
+                {
+                    Parameters = new ParameterContainer(isBigEndian, ParameterBytes, template);
+                }
+                catch
+                {
+                    Array.Clear(ParameterBytes, 0, ParameterBytes.Length);
+                    Parameters = new ParameterContainer(isBigEndian, ParameterBytes, template);
+                }
             }
 
             private void CopyParametersToBytes(bool isBigEndian)
