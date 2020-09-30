@@ -2,6 +2,7 @@
 using SoulsFormats;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 namespace SoulsAssetPipeline
@@ -228,6 +229,9 @@ namespace SoulsAssetPipeline
                 
                
             }
+
+            //if (rootNode.Children == null)
+            //    throw new InvalidDataException("Assimp scene has no heirarchy.");
 
             AddBone(rootNode.Children[0], null, rootNodeAbsoluteMatrix);
 

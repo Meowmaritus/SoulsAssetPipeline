@@ -139,9 +139,9 @@ namespace SoulsAssetPipeline.Animation
 
     public abstract class HavokAnimationData
     {
-        public string Name { get; }
+        public string Name { get; internal set;  }
 
-        public RootMotionData RootMotion { get; }
+        public RootMotionData RootMotion { get; internal set; }
 
         public HKX.AnimationBlendHint BlendHint = HKX.AnimationBlendHint.NORMAL;
 
@@ -170,7 +170,7 @@ namespace SoulsAssetPipeline.Animation
                 RootMotion = new RootMotionData(refFrame);
             }
 
-            BlendHint = binding.BlendHint;
+            BlendHint = binding?.BlendHint ?? HKX.AnimationBlendHint.NORMAL;
         }
 
         public abstract NewBlendableTransform GetBlendableTransformOnFrame(int hkxBoneIndex, float frame);
