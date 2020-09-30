@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Numerics;
 
-namespace SFAnimExtensions.Havok
+namespace SoulsAssetPipeline.Animation
 {
     public struct NewBlendableTransform
     {
@@ -257,17 +257,17 @@ namespace SFAnimExtensions.Havok
             }
             else
             {
-                if (track.Mask.ScaleTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticX))
+                if (track.Mask.ScaleTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticX))
                     result.Scale.X = track.StaticScale.X;
                 else
                     result.Scale.X = IsAdditiveBlend ? 1 : skeleTransform.Scale.Vector.X;
 
-                if (track.Mask.ScaleTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticY))
+                if (track.Mask.ScaleTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticY))
                     result.Scale.Y = track.StaticScale.Y;
                 else
                     result.Scale.Y = IsAdditiveBlend ? 1 : skeleTransform.Scale.Vector.Y;
 
-                if (track.Mask.ScaleTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticZ))
+                if (track.Mask.ScaleTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticZ))
                     result.Scale.Z = track.StaticScale.Z;
                 else
                     result.Scale.Z = IsAdditiveBlend ? 1 : skeleTransform.Scale.Vector.Z;
@@ -296,12 +296,12 @@ namespace SFAnimExtensions.Havok
             }
             else
             {
-                result.Rotation = Quaternion.Identity;
-                //result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
-                //    skeleTransform.Rotation.Vector.X,
-                //    skeleTransform.Rotation.Vector.Y,
-                //    skeleTransform.Rotation.Vector.Z,
-                //    skeleTransform.Rotation.Vector.W);
+                //result.Rotation = Quaternion.Identity;
+                result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
+                    skeleTransform.Rotation.Vector.X,
+                    skeleTransform.Rotation.Vector.Y,
+                    skeleTransform.Rotation.Vector.Z,
+                    skeleTransform.Rotation.Vector.W);
             }
 
             //if (IsAdditiveBlend)
@@ -326,17 +326,17 @@ namespace SFAnimExtensions.Havok
             }
             else
             {
-                if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticX))
+                if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticX))
                     result.Translation.X = track.StaticPosition.X;
                 else
                     result.Translation.X = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.X;
 
-                if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticY))
+                if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticY))
                     result.Translation.Y = track.StaticPosition.Y;
                 else
                     result.Translation.Y = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y;
 
-                if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticZ))
+                if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticZ))
                     result.Translation.Z = track.StaticPosition.Z;
                 else
                     result.Translation.Z = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z;

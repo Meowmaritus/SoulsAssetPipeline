@@ -8,7 +8,7 @@ using System.Numerics;
 
 using SoulsFormats;
 
-namespace SFAnimExtensions
+namespace SoulsAssetPipeline.Animation
 {
     /// <summary>
     /// A havok file that contains animations and collision data

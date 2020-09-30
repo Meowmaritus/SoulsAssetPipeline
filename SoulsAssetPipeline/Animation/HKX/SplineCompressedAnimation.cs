@@ -26,7 +26,7 @@ using System.Numerics;
 
 using SoulsFormats;
 
-namespace SFAnimExtensions.Havok
+namespace SoulsAssetPipeline.Animation
 {
     public class SplineCompressedAnimation
     {
@@ -623,17 +623,17 @@ namespace SFAnimExtensions.Havok
                 }
                 else
                 {
-                    if (track.Mask.ScaleTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticX))
+                    if (track.Mask.ScaleTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticX))
                         result.Scale.X = track.StaticScale.X;
                     else
                         result.Scale.X = 1;
 
-                    if (track.Mask.ScaleTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticY))
+                    if (track.Mask.ScaleTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticY))
                         result.Scale.Y = track.StaticScale.Y;
                     else
                         result.Scale.Y = 1;
 
-                    if (track.Mask.ScaleTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticZ))
+                    if (track.Mask.ScaleTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticZ))
                         result.Scale.Z = track.StaticScale.Z;
                     else
                         result.Scale.Z = 1;
@@ -667,17 +667,17 @@ namespace SFAnimExtensions.Havok
                 }
                 else
                 {
-                    if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticX))
+                    if (track.Mask.PositionTypes.Contains(FlagOffset.StaticX))
                         result.Translation.X = track.StaticPosition.X;
                     else
                         result.Translation.X = 0;
 
-                    if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticY))
+                    if (track.Mask.PositionTypes.Contains(FlagOffset.StaticY))
                         result.Translation.Y = track.StaticPosition.Y;
                     else
                         result.Translation.Y = 0;
 
-                    if (track.Mask.PositionTypes.Contains(Havok.SplineCompressedAnimation.FlagOffset.StaticZ))
+                    if (track.Mask.PositionTypes.Contains(FlagOffset.StaticZ))
                         result.Translation.Z = track.StaticPosition.Z;
                     else
                         result.Translation.Z = 0;

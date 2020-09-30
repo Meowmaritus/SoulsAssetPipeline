@@ -8,7 +8,7 @@ using SoulsFormats;
 
 #pragma warning disable CS1591
 
-namespace SFAnimExtensions
+namespace SoulsAssetPipeline.Animation
 {
     public partial class HKX
     {

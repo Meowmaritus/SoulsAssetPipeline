@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Numerics;
 
-namespace SFAnimExtensions.Havok
+namespace SoulsAssetPipeline.Animation
 {
     public class RootMotionData
     {

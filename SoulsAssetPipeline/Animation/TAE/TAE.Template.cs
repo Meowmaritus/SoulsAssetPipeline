@@ -7,7 +7,7 @@ using System.Xml;
 
 using SoulsFormats;
 
-namespace SFAnimExtensions
+namespace SoulsAssetPipeline.Animation
 {
     public partial class TAE
     {

@@ -5,7 +5,7 @@ using System.Xml;
 
 using SoulsFormats;
 
-namespace SFAnimExtensions
+namespace SoulsAssetPipeline.Animation
 {
     /// <summary>
     /// Controls when different events happen during animations; this specific version is used in DS3. Extension: .tae
@@ -1371,15 +1371,7 @@ namespace SFAnimExtensions
                     CopyParametersToBytes(isBigEndian);
                 }
                 Array.Resize(ref ParameterBytes, template.GetAllParametersByteCount());
-                try
-                {
-                    Parameters = new ParameterContainer(isBigEndian, ParameterBytes, template);
-                }
-                catch
-                {
-                    Array.Clear(ParameterBytes, 0, ParameterBytes.Length);
-                    Parameters = new ParameterContainer(isBigEndian, ParameterBytes, template);
-                }
+                Parameters = new ParameterContainer(isBigEndian, ParameterBytes, template);
             }
 
             private void CopyParametersToBytes(bool isBigEndian)
