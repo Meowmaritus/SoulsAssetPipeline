@@ -14,7 +14,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="SapResources\FLVER2XmlVertLayouts_DS1.xml">
+    <None Update="SapResources\FLVER2MaterialInfoBank\BankBB.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="SapResources\FLVER2MaterialInfoBank\BankDS1.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="SapResources\FLVER2MaterialInfoBank\BankDS1R.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="SapResources\FLVER2MaterialInfoBank\BankDS2.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="SapResources\FLVER2MaterialInfoBank\BankDS3.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="SapResources\FLVER2MaterialInfoBank\BankSDT.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
