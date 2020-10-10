@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <material_info_bank>
+  <default_fallback_mtd_name>P_Metal[DSB].mtd</default_fallback_mtd_name>
   <material_def_list>
     <material_def mtd="C_Leather[DSB].mtd">
       <acceptable_vertex_buffer_declarations>

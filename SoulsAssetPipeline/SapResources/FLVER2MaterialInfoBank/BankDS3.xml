@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <material_info_bank>
+  <default_fallback_mtd_name>C[ARSN].mtd</default_fallback_mtd_name>
   <material_def_list>
     <material_def mtd="C[ARSN].mtd">
       <acceptable_vertex_buffer_declarations>
@@ -1872,7 +1873,7 @@
         <texture_channel semantic="Normals" index="0">RecursiveCrystal_snp_Texture2D_3_NormalMap_0</texture_channel>
         <texture_channel semantic="Specular" index="0">RecursiveCrystal_snp_Texture2D_1_ReflectanceMap_0</texture_channel>
         <texture_channel semantic="Shininess" index="0">RecursiveCrystal_snp_Texture2D_5_ShininessMap_0</texture_channel>
-        <texture_channel semantic="Shininess" index="0">RecursiveCrystal_snp_Texture2D_4_ShininessMap_0</texture_channel>
+        <texture_channel semantic="Shininess" index="-1">RecursiveCrystal_snp_Texture2D_4_ShininessMap_0</texture_channel>
       </texture_channel_list>
       <gx_item_list>
         <gx_item gxid="GXMD" unk04="134" data_length="108" />
@@ -5341,8 +5342,8 @@
         <texture_channel semantic="BlendEdge" index="0">MultiBlend2_et1_em_Mask2_snp_Texture2D_0_GSBlendMap_BlendEdgeTexture</texture_channel>
         <texture_channel semantic="Emissive" index="0">MultiBlend2_et1_em_Mask2_snp_Texture2D_3_GSBlendMap_EmissiveMap_0</texture_channel>
         <texture_channel semantic="Emissive" index="1">MultiBlend2_et1_em_Mask2_snp_Texture2D_4_GSBlendMap_EmissiveMap_1</texture_channel>
-        <texture_channel semantic="Emissive" index="0">MultiBlend2_et1_em_Mask2_snp_Texture2D_11_GSBlendMap_EmissiveMask_0</texture_channel>
-        <texture_channel semantic="Emissive" index="1">MultiBlend2_et1_em_Mask2_snp_Texture2D_8_GSBlendMap_EmissiveMask_1</texture_channel>
+        <texture_channel semantic="EmissiveMask" index="0">MultiBlend2_et1_em_Mask2_snp_Texture2D_11_GSBlendMap_EmissiveMask_0</texture_channel>
+        <texture_channel semantic="EmissiveMask" index="1">MultiBlend2_et1_em_Mask2_snp_Texture2D_8_GSBlendMap_EmissiveMask_1</texture_channel>
         <texture_channel semantic="Normals" index="0">MultiBlend2_et1_em_Mask2_snp_Texture2D_13_GSBlendMap_NormalMap_0</texture_channel>
         <texture_channel semantic="Normals" index="1">MultiBlend2_et1_em_Mask2_snp_Texture2D_14_GSBlendMap_NormalMap_1</texture_channel>
         <texture_channel semantic="Specular" index="0">MultiBlend2_et1_em_Mask2_snp_Texture2D_5_GSBlendMap_ReflectanceMap_0</texture_channel>
@@ -5375,7 +5376,7 @@
         <texture_channel semantic="BlendEdge" index="0">MultiBlend2_et1_em_Mask_snp_Texture2D_0_GSBlendMap_BlendEdgeTexture</texture_channel>
         <texture_channel semantic="Emissive" index="0">MultiBlend2_et1_em_Mask_snp_Texture2D_3_GSBlendMap_EmissiveMap_0</texture_channel>
         <texture_channel semantic="Emissive" index="1">MultiBlend2_et1_em_Mask_snp_Texture2D_4_GSBlendMap_EmissiveMap_1</texture_channel>
-        <texture_channel semantic="Emissive" index="0">MultiBlend2_et1_em_Mask_snp_Texture2D_7_GSBlendMap_EmissiveMask</texture_channel>
+        <texture_channel semantic="EmissiveMask" index="0">MultiBlend2_et1_em_Mask_snp_Texture2D_7_GSBlendMap_EmissiveMask</texture_channel>
         <texture_channel semantic="Normals" index="0">MultiBlend2_et1_em_Mask_snp_Texture2D_13_GSBlendMap_NormalMap_0</texture_channel>
         <texture_channel semantic="Normals" index="1">MultiBlend2_et1_em_Mask_snp_Texture2D_14_GSBlendMap_NormalMap_1</texture_channel>
         <texture_channel semantic="Specular" index="0">MultiBlend2_et1_em_Mask_snp_Texture2D_5_GSBlendMap_ReflectanceMap_0</texture_channel>
@@ -6736,7 +6737,7 @@
         <texture_channel semantic="BlendEdge" index="0">BloodBlend_snp_Texture2D_0_GSBlendMap_BlendEdgeTexture</texture_channel>
         <texture_channel semantic="Blendmask" index="0">BloodBlend_snp_Texture2D_3_GSBlendMap_Blood_BlendMask</texture_channel>
         <texture_channel semantic="Blendmask" index="2">BloodBlend_snp_Texture2D_11_GSBlendMap_Blood_BlendMask2</texture_channel>
-        <texture_channel semantic="Unknown" index="0">BloodBlend_snp_Texture2D_4_GSBlendMap_FlowMap_0</texture_channel>
+        <texture_channel semantic="Flow" index="0">BloodBlend_snp_Texture2D_4_GSBlendMap_FlowMap_0</texture_channel>
         <texture_channel semantic="Normals" index="0">BloodBlend_snp_Texture2D_13_GSBlendMap_NormalMap_0</texture_channel>
         <texture_channel semantic="Normals" index="1">BloodBlend_snp_Texture2D_14_GSBlendMap_NormalMap_1</texture_channel>
         <texture_channel semantic="Normals" index="2">BloodBlend_snp_Texture2D_7_GSBlendMap_NormalMap_2</texture_channel>

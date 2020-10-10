@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <material_info_bank>
+  <default_fallback_mtd_name>W[Ibl][DSB].mtd</default_fallback_mtd_name>
   <material_def_list>
     <material_def mtd="C[Ibl][DSB].mtd">
       <acceptable_vertex_buffer_declarations>
@@ -4061,7 +4062,7 @@
         <texture_channel semantic="Diffuse" index="0">g_DiffuseTexture</texture_channel>
         <texture_channel semantic="Specular" index="0">g_SpecularTexture</texture_channel>
         <texture_channel semantic="Normals" index="0">g_BumpmapTexture</texture_channel>
-        <texture_channel semantic="Normals" index="0">g_AdditionalBumpmapTexture</texture_channel>
+        <texture_channel semantic="AdditionalNormals" index="0">g_AdditionalBumpmapTexture</texture_channel>
         <texture_channel semantic="Unknown" index="0">g_GITexture</texture_channel>
       </texture_channel_list>
       <gx_item_list>
@@ -4687,7 +4688,7 @@
         <texture_channel semantic="Specular" index="2">g_SpecularTexture2</texture_channel>
         <texture_channel semantic="Normals" index="0">g_BumpmapTexture</texture_channel>
         <texture_channel semantic="Normals" index="2">g_BumpmapTexture2</texture_channel>
-        <texture_channel semantic="Normals" index="0">g_AdditionalBumpmapTexture</texture_channel>
+        <texture_channel semantic="AdditionalNormals" index="0">g_AdditionalBumpmapTexture</texture_channel>
         <texture_channel semantic="Blendmask" index="0">g_BlendMaskTexture</texture_channel>
       </texture_channel_list>
       <gx_item_list>
@@ -4750,7 +4751,7 @@
         <texture_channel semantic="Diffuse" index="0">g_DiffuseTexture</texture_channel>
         <texture_channel semantic="Specular" index="0">g_SpecularTexture</texture_channel>
         <texture_channel semantic="Normals" index="0">g_BumpmapTexture</texture_channel>
-        <texture_channel semantic="Normals" index="0">g_AdditionalBumpmapTexture</texture_channel>
+        <texture_channel semantic="AdditionalNormals" index="0">g_AdditionalBumpmapTexture</texture_channel>
       </texture_channel_list>
       <gx_item_list>
         <gx_item gxid="1" unk04="102" data_length="40" />

@@ -41,6 +41,11 @@ namespace SoulsAssetPipeline.FLVERImporting
         DetailNormals,
 
         /// <summary>
+        /// ??? DS2 only. 
+        /// </summary>
+        AdditionalNormals,
+
+        /// <summary>
         /// Additional normal map overlayed over the standard one when equipment is broken. 
         /// Almost always points to a shared global texture that is a looping set of scratches and cracks.
         /// </summary>
@@ -54,6 +59,11 @@ namespace SoulsAssetPipeline.FLVERImporting
         /// orange sheen effect shared global texture.
         /// </summary>
         Emissive,
+
+        /// <summary>
+        /// Mask for emissive map.
+        /// </summary>
+        EmissiveMask,
 
         /// <summary>
         /// Blend-texture masking map. Used for models with 2 different sets of textures. This map acts as a bridge between them, 

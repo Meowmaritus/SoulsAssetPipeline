@@ -12,6 +12,21 @@ namespace SoulsAssetPipeline.FLVERImporting
 {
     public class FLVER2MaterialInfoBank
     {
+        public string DefaultFallbackMTDName;
+
+        public string FallbackToDefaultMtdIfNecessary(string mtd, SapLogger logger)
+        {
+            if (MaterialDefs.ContainsKey(mtd))
+            {
+                return mtd;
+            }
+            else
+            {
+                logger?.LogWarning($"MTD {mtd} did not exist. Falling back to default, which is '{DefaultFallbackMTDName}'.");
+                return DefaultFallbackMTDName;
+            }
+        }
+
         public Dictionary<string, MaterialDef> MaterialDefs = new Dictionary<string, MaterialDef>();
         public Dictionary<string, XmlStructDef> GXItemStructs = new Dictionary<string, XmlStructDef>();
 
@@ -118,6 +133,10 @@ namespace SoulsAssetPipeline.FLVERImporting
         {
             public TextureChannelSemantic Semantic;
             public int Index;
+            public override string ToString()
+            {
+                return $"{Semantic}[{Index}]";
+            }
         }
 
         public class MaterialDef
@@ -158,16 +177,20 @@ namespace SoulsAssetPipeline.FLVERImporting
                 // Check before normals because this contains "Bumpmap"
                 else if (Check("DetailBumpmap", "DetailBumpMap", "DetailNormal"))
                     t.Semantic = TextureChannelSemantic.DetailNormals;
+                else if (Check("AdditionalBumpmapTexture"))
+                    t.Semantic = TextureChannelSemantic.AdditionalNormals;
                 // Check before normals because this contains "Bumpmap"
                 else if (Check("BreakBumpmap", "DamageNormal", "DamagedNormalTexture"))
                     t.Semantic = TextureChannelSemantic.EquipmentBrokenNormals;
                 else if (Check("NormalMap", "Bumpmap"))
                     t.Semantic = TextureChannelSemantic.Normals;
 
+                else if (Check("EmissiveMask"))
+                    t.Semantic = TextureChannelSemantic.Emissive;
                 else if (Check("Emissive"))
                     t.Semantic = TextureChannelSemantic.Emissive;
 
-                else if (Check("BlendMask", "Blendmask", "BlendMap")) 
+                else if (Check("BlendMask", "Blendmask", "BlendMap"))
                     //TODO: Double check if "Blendmask" is used
                     t.Semantic = TextureChannelSemantic.Blendmask;
 
@@ -186,7 +209,7 @@ namespace SoulsAssetPipeline.FLVERImporting
                 else if (Check("Displacement"))
                     t.Semantic = TextureChannelSemantic.Displacement;
 
-                else if (Check("ScatteringMask", "SSSMask"))
+                else if (Check("ScatteringMask", "SSSMask", "g_Subsurf"))
                     t.Semantic = TextureChannelSemantic.ScatteringMask;
 
                 else if (Check("HighLight", "Highlight"))
@@ -213,14 +236,14 @@ namespace SoulsAssetPipeline.FLVERImporting
                 else if (Check("_Star")) // Typo everywhere it's found in SDT
                     t.Semantic = TextureChannelSemantic.SDTStar;
 
-                else if (Check("Flow"))
+                else if (Check("FlowMap", "_FlowTexture"))
                     t.Semantic = TextureChannelSemantic.Flow;
 
                 else if (Check("_アルファマップ")) // Lit. "ALPHA MAP"
                     // Going to guess alpha map is opacity
                     t.Semantic = TextureChannelSemantic.Opacity;
 
-                else if (Check("HeightMap", "g_SnowHeightTexture"))
+                else if (Check("HeightMap", "g_SnowHeightTexture", "g_Height"))
                     t.Semantic = TextureChannelSemantic.Height;
 
                 else if (Check("_Foam1"))
@@ -229,11 +252,19 @@ namespace SoulsAssetPipeline.FLVERImporting
                 else if (Check("_BurningMap"))
                     t.Semantic = TextureChannelSemantic.DS3Burning;
 
-                else if (Check("_DOLTexture1"))
+                else if (Check("_DOLTexture1", "g_Lightmap"))
+                {
                     t.Semantic = TextureChannelSemantic.Lightmap1;
+                    if (name.EndsWith("_DOLTexture1"))
+                        t.Index = 0;
+                }
 
                 else if (Check("_DOLTexture2"))
+                {
                     t.Semantic = TextureChannelSemantic.Lightmap2;
+                    if (name.EndsWith("_DOLTexture2"))
+                        t.Index = 0;
+                }
 
                 else if (Check("GITexture"))
                     t.Semantic = TextureChannelSemantic.GlobalIllumination;
@@ -251,7 +282,7 @@ namespace SoulsAssetPipeline.FLVERImporting
 
             public void ReadXML(XmlNode node)
             {
-                MTD = node.Attributes["mtd"].InnerText;
+                MTD = node.Attributes["mtd"].InnerText.ToLower();
 
 
                 AcceptableVertexBufferDeclarations.Clear();
@@ -270,13 +301,15 @@ namespace SoulsAssetPipeline.FLVERImporting
                 var texChannelNodes = node.SelectNodes("texture_channel_list/texture_channel");
                 foreach (XmlNode tcn in texChannelNodes)
                 {
+                    var texChannelSemanticIndex = tcn.SafeGetInt32Attribute("index");
+
                     string semanticAttribute = tcn.SafeGetAttribute("semantic");
                     var texChannelSemantic = (TextureChannelSemantic)Enum.Parse(typeof(TextureChannelSemantic), semanticAttribute);
 
                     // Try to figure out at runtime.
                     if (texChannelSemantic == TextureChannelSemantic.Unknown)
                     {
-                        texChannelSemantic = GetTexChannelTypeFromName(semanticAttribute).Semantic;
+                        texChannelSemantic = GetTexChannelTypeFromName(tcn.InnerText).Semantic;
                     }
 
                     // See if runtime check passed.
@@ -285,12 +318,16 @@ namespace SoulsAssetPipeline.FLVERImporting
                         throw new Exception($"Semantic of texture channel '{tcn.InnerText}' not defined.");
                     }
 
-                    var texChannelSemanticIndex = tcn.SafeGetInt32Attribute("index");
-                    TextureChannels.Add(new FlverTextureChannelType()
+                    var chanTypeKey = new FlverTextureChannelType()
                     {
                         Semantic = texChannelSemantic,
                         Index = texChannelSemanticIndex,
-                    }, tcn.InnerText);
+                    };
+
+
+                    if (!TextureChannels.ContainsKey(chanTypeKey))
+                        TextureChannels.Add(chanTypeKey, tcn.InnerText);
+                    //ErrorTODO else print warning maybe
                 }
 
 
@@ -310,11 +347,12 @@ namespace SoulsAssetPipeline.FLVERImporting
         {
             XmlDocument xml = new XmlDocument();
             xml.Load(xmlFile);
+
+            DefaultFallbackMTDName = xml.SelectSingleNode("material_info_bank/default_fallback_mtd_name").InnerText.ToLower();
+
             var materialDefNodes = xml.SelectNodes("material_info_bank/material_def_list/material_def");
 
             MaterialDefs.Clear();
-
-            List<string> mtdsAlreadyDefined = new List<string>();
 
             foreach (XmlNode mdn in materialDefNodes)
             {
@@ -323,11 +361,8 @@ namespace SoulsAssetPipeline.FLVERImporting
                 if (!MaterialDefs.ContainsKey(mat.MTD))
                     MaterialDefs.Add(mat.MTD, mat);
                 else
-                    throw new Exception($"MTD '{mat.MTD}' defined twice in material info bank.");
-                if (mtdsAlreadyDefined.Contains(mat.MTD))
-                    Console.WriteLine("FATCAT");
-                else
-                    mtdsAlreadyDefined.Add(mat.MTD);
+                    //throw new Exception($"MTD '{mat.MTD}' defined twice in material info bank.");
+                    MaterialDefs[mat.MTD] = mat;
             }
 
             GXItemStructs.Clear();
@@ -342,10 +377,10 @@ namespace SoulsAssetPipeline.FLVERImporting
 
             DefaultGXItemDataExamples.Clear();
 
-            var matExamples = xml.SelectNodes("MATERIAL_INSTANCE_EXAMPLE_LIST/MATERIAL_INSTANCE_EXAMPLE");
+            var matExamples = xml.SelectNodes("material_info_bank/MATERIAL_INSTANCE_EXAMPLE_LIST/MATERIAL_INSTANCE_EXAMPLE");
             foreach (XmlNode matExNode in matExamples)
             {
-                var mtd = matExNode.SafeGetAttribute("mtd");
+                var mtd = matExNode.SafeGetAttribute("mtd").ToLower();
                 var exNodes = matExNode.SelectNodes("material_data_example");
 
                 List<byte[]> gxExamplesForThisMtd = new List<byte[]>();

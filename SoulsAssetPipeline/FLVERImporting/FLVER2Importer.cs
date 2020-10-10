@@ -5,6 +5,9 @@ using System.Linq;
 using System.Text;
 using Assimp;
 using SoulsFormats;
+using NMatrix = System.Numerics.Matrix4x4;
+using NVector3 = System.Numerics.Vector3;
+using NQuaternion = System.Numerics.Quaternion;
 
 namespace SoulsAssetPipeline.FLVERImporting
 {
@@ -14,25 +17,27 @@ namespace SoulsAssetPipeline.FLVERImporting
 
         private AssimpContext context;
 
-        private static Dictionary<SoulsGames, FLVER2MaterialInfoBank> 
-            MaterialInfoBankPerGame = new Dictionary<SoulsGames, FLVER2MaterialInfoBank>();
+        private static Dictionary<SoulsGames, FLVER2MaterialInfoBank> MaterialInfoBankPerGame 
+            = new Dictionary<SoulsGames, FLVER2MaterialInfoBank>();
+
+        public SapLogger Logger = new SapLogger();
+
+        private static void LoadMaterialInfoBankForGame(SoulsGames g)
+        {
+            if (MaterialInfoBankPerGame.ContainsKey(g))
+                return;
+            //string xmlPath = Path.Combine(SapUtils.AssemblyDirectory, string.Format(BANK_RESOURCE_PATH, g.ToString()));
+            string xmlPath = string.Format(BANK_RESOURCE_PATH, g.ToString());
+            if (File.Exists(xmlPath))
+            {
+                var bank = FLVER2MaterialInfoBank.ReadFromXML(xmlPath);
+                MaterialInfoBankPerGame.Add(g, bank);
+            }
+        }
 
         public FLVER2Importer()
         {
             context = new AssimpContext();
-
-            if (MaterialInfoBankPerGame == null)
-            {
-                var gameKinds = ((SoulsGames[])Enum.GetValues(typeof(SoulsGames))).Select(x => x.ToString()).ToList();
-                foreach (var g in gameKinds)
-                {
-                    string xmlPath = Path.Combine(SapUtils.AssemblyDirectory, string.Format(BANK_RESOURCE_PATH, g));
-                    if (File.Exists(xmlPath))
-                    {
-                        var bank = FLVER2MaterialInfoBank.ReadFromXML(xmlPath);
-                    }
-                }
-            }
         }
 
         public void Dispose()
@@ -43,7 +48,7 @@ namespace SoulsAssetPipeline.FLVERImporting
         public class ImportedFLVER2Model
         {
             public FLVER2 Flver;
-            public Dictionary<string, byte[]> Textures = new Dictionary<string, byte[]>();
+            public List<TPF.Texture> Textures = new List<TPF.Texture>();
 
             //TODO: FLESH THIS OUT
         }
@@ -68,12 +73,14 @@ namespace SoulsAssetPipeline.FLVERImporting
 
         public ImportedFLVER2Model ImportFromAssimpScene(Scene scene, FLVER2ImportSettings settings)
         {
+            LoadMaterialInfoBankForGame(settings.Game);
+
             var result = new ImportedFLVER2Model();
             var flver = result.Flver = new FLVER2();
 
             flver.Header.BigEndian = settings.FlverHeader.BigEndian;
-            flver.Header.BoundingBoxMax = settings.FlverHeader.BoundingBoxMax;
-            flver.Header.BoundingBoxMin = settings.FlverHeader.BoundingBoxMin;
+            flver.Header.BoundingBoxMax = new NVector3(float.MinValue);
+            flver.Header.BoundingBoxMin = new NVector3(float.MaxValue);
             flver.Header.Unicode = settings.FlverHeader.Unicode;
             flver.Header.Unk4A = settings.FlverHeader.Unk4A;
             flver.Header.Unk4C = settings.FlverHeader.Unk4C;
@@ -82,73 +89,138 @@ namespace SoulsAssetPipeline.FLVERImporting
             flver.Header.Unk68 = settings.FlverHeader.Unk68;
             flver.Header.Version = settings.FlverHeader.Version;
 
-            var flverSceneMatrix = System.Numerics.Matrix4x4.CreateScale(System.Numerics.Vector3.One * settings.SceneScale);
+            var flverSceneMatrix = NMatrix.CreateScale(NVector3.One * settings.SceneScale);
 
             
 
             if (settings.ConvertFromZUp)
             {
-                flverSceneMatrix *= System.Numerics.Matrix4x4.CreateRotationZ((float)(Math.PI));
-                flverSceneMatrix *= System.Numerics.Matrix4x4.CreateRotationX((float)(-Math.PI / 2.0));
+                flverSceneMatrix *= SapMath.ZUpToYUpNMatrix;
 
             }
 
-            flverSceneMatrix *= System.Numerics.Matrix4x4.CreateScale(1, 1, -1);
+            flverSceneMatrix *= NMatrix.CreateScale(1, 1, -1);
 
 
             var skeletonRootNode = AssimpUtilities.FindRootNode(scene, "root", out Matrix4x4 skeletonRootNodeMatrix);
             var metaskeleton = FLVERImportHelpers.GenerateFlverMetaskeletonFromRootNode(
-                skeletonRootNode, skeletonRootNodeMatrix, flverSceneMatrix);
+                skeletonRootNode, skeletonRootNodeMatrix, settings.SceneScale, settings.ConvertFromZUp);
 
             flver.Bones = metaskeleton.Bones;
+
+            foreach (var b in flver.Bones)
+            {
+                // Mark as dummied-out bone until iterating over them later and seeing which are weighted to meshes.
+                b.Unk3C = 1;
+            }
+
             flver.Dummies = metaskeleton.DummyPoly;
+
+            var flverMaterialList = new List<FLVER2.Material>();
 
             foreach (var material in scene.Materials)
             {
                 string[] materialNameSplit = material.Name.Split('|');
+                string mtd = materialNameSplit[1].Trim().ToLower() + ".mtd";
+
+                // If MTD doesn't exist, use original
+                mtd = MaterialInfoBankPerGame[settings.Game].FallbackToDefaultMtdIfNecessary(mtd, Logger);
+
                 //ErrorTODO: materialNameSplit should be 2 items long.
-                var flverMaterial = new FLVER2.Material(materialNameSplit[0], materialNameSplit[1], 0);
+                var flverMaterial = new FLVER2.Material(materialNameSplit[0].Trim(), mtd, 0);
 
-                
 
-                //TODO: Implement GX stuff somehow...? Gah
-
-                //TODO: IMPLEMENT ACTUAL TEXTURE STUFF FROM XML DEFS
-                flverMaterial.Textures.Add(new FLVER2.Texture(type: "g_Diffuse",
-                    path: material.TextureDiffuse.FilePath,
+                void AddTextureSlot(TextureSlot slot, string ingameSlot)
+                {
+                    flverMaterial.Textures.Add(new FLVER2.Texture(type: ingameSlot,
+                    path: Path.GetFullPath(slot.FilePath),
                     scale: System.Numerics.Vector2.One,
-                    0, false, 0, 0, 0));
-                flverMaterial.Textures.Add(new FLVER2.Texture(type: "g_Specular",
-                    path: material.TextureSpecular.FilePath,
-                    scale: System.Numerics.Vector2.One,
-                    0, false, 0, 0, 0));
-                flverMaterial.Textures.Add(new FLVER2.Texture(type: "g_Bumpmap",
-                    path: material.TextureNormal.FilePath,
-                    scale: System.Numerics.Vector2.One,
-                    0, false, 0, 0, 0));
+                        1, true, 0, 0, 0));
 
-                
+                    string texName = Path.GetFileNameWithoutExtension(slot.FilePath);
+                    byte[] texData = scene.GetEmbeddedTexture(slot.FilePath).CompressedData;
+                    var ddsFormat = TPFTextureFormatFinder.GetTpfFormatFromDdsBytes(texData);
 
-                result.Textures.Add(
-                    System.IO.Path.GetFileNameWithoutExtension(material.TextureDiffuse.FilePath),
-                    scene.GetEmbeddedTexture(material.TextureDiffuse.FilePath).CompressedData);
-                result.Textures.Add(
-                    System.IO.Path.GetFileNameWithoutExtension(material.TextureSpecular.FilePath),
-                    scene.GetEmbeddedTexture(material.TextureSpecular.FilePath).CompressedData);
-                result.Textures.Add(
-                    System.IO.Path.GetFileNameWithoutExtension(material.TextureNormal.FilePath),
-                    scene.GetEmbeddedTexture(material.TextureNormal.FilePath).CompressedData);
+                    result.Textures.Add(new TPF.Texture(texName, format: ddsFormat, flags1: 0, bytes: texData));
+                }
 
+                var materialDefinition = MaterialInfoBankPerGame[settings.Game].MaterialDefs[mtd];
+                var texChanDefs = materialDefinition.TextureChannels;
+                foreach (var kvp in texChanDefs)
+                {
+                    if (kvp.Key.Index == 0)
+                    {
+                        if (kvp.Key.Semantic == TextureChannelSemantic.Diffuse)
+                            AddTextureSlot(material.TextureDiffuse, kvp.Value);
+                        else if (kvp.Key.Semantic == TextureChannelSemantic.Specular)
+                            AddTextureSlot(material.TextureSpecular, kvp.Value);
+                        else if (kvp.Key.Semantic == TextureChannelSemantic.Normals)
+                            AddTextureSlot(material.TextureNormal, kvp.Value);
+                        else if (kvp.Key.Semantic == TextureChannelSemantic.Emissive)
+                            AddTextureSlot(material.TextureEmissive, kvp.Value);
+                        else
+                        {
+                            flverMaterial.Textures.Add(new FLVER2.Texture(type: kvp.Value,
+                                path: string.Empty,
+                                scale: System.Numerics.Vector2.One,
+                                0, false, 0, 0, 0));
+                        }
+                    }
+                }
 
-                flver.Materials.Add(flverMaterial);
+                if (materialDefinition.GXItems.Count > 0)
+                {
+                    flverMaterial.GXIndex = flver.GXLists.Count;
+                    var gxList = new FLVER2.GXList();
+
+                    for (int i = 0; i < materialDefinition.GXItems.Count; i++)
+                    {
+                        var gxid = materialDefinition.GXItems[i].GXID;
+                        var unk04 = materialDefinition.GXItems[i].Unk04;
+                        byte[] data = MaterialInfoBankPerGame[settings.Game].DefaultGXItemDataExamples[mtd][i];
+                        gxList.Add(new FLVER2.GXItem(gxid, unk04, data));
+                    }
+                    flver.GXLists.Add(gxList);
+                }
+
+                //flver.Materials.Add(flverMaterial);
+                flverMaterialList.Add(flverMaterial);
             }
 
             foreach (var mesh in scene.Meshes)
             {
                 var flverMesh = new FLVER2.Mesh();
 
+                flverMesh.BoundingBox = new FLVER2.Mesh.BoundingBoxes();
+
                 //TODO: ACTUALLY READ FROM THINGS
                 flverMesh.Dynamic = 1;
+
+
+
+                // Register mesh transform bone:
+                //flverMesh.DefaultBoneIndex = flver.Bones.Count;
+                //int flverLastRootBoneIndex = flver.Bones.FindLastIndex(b => b.ParentIndex == -1);
+                //// Register this new bone as a sibling.
+                //if (flverLastRootBoneIndex >= 0)
+                //    flver.Bones[flverLastRootBoneIndex].NextSiblingIndex = (short)flverMesh.DefaultBoneIndex;
+                //flver.Bones.Add(new FLVER.Bone()
+                //{
+                //    Name = mesh.Name,
+                //    Translation = NVector3.Zero,
+                //    Rotation = NVector3.Zero,
+                //    Scale = NVector3.One,
+                //    BoundingBoxMin = NVector3.One * -0.05f,
+                //    BoundingBoxMax = NVector3.One * 0.05f,
+                //    // Cross-register sibling from above.
+                //    PreviousSiblingIndex = (short)flverLastRootBoneIndex,
+                //    NextSiblingIndex = -1,
+                //    ParentIndex = -1,
+                //    ChildIndex = -1,
+                //    Unk3C = 1,
+                //});
+
+
 
                 int meshUVCount = 0;
                 for (int i = 0; i < mesh.UVComponentCount.Length; i++)
@@ -157,16 +229,42 @@ namespace SoulsAssetPipeline.FLVERImporting
                         meshUVCount++;
                 }
 
-                //TODO: Load buffer layout from FLVER2XmlVertLayoutManager
-                var flverBufferLayout = new FLVER2.BufferLayout();
-
-                //Temporary hack to make DSAnimStudio realize there are bone indices in the mesh
-                flverBufferLayout.Add(new FLVER.LayoutMember(FLVER.LayoutType.Byte4A, FLVER.LayoutSemantic.BoneIndices, 0, 0));
+                
 
                 var flverFaceSet = new FLVER2.FaceSet();
-                var flverVertBuffer = new FLVER2.VertexBuffer(layoutIndex: flver.Meshes.Count);
 
-                flverMesh.MaterialIndex = mesh.MaterialIndex;
+
+
+                // Handle vertex buffers / layouts:
+                //flverMesh.MaterialIndex = mesh.MaterialIndex;
+                var newMat = flverMaterialList[mesh.MaterialIndex];
+                flverMesh.MaterialIndex = flver.Materials.Count;
+                flver.Materials.Add(newMat);
+
+                var flverMaterial = flver.Materials[flverMesh.MaterialIndex];
+                var matDefinition = MaterialInfoBankPerGame[settings.Game].MaterialDefs[flverMaterial.MTD];
+                var defaultBufferDeclaration = matDefinition.AcceptableVertexBufferDeclarations[0];
+
+                Dictionary<FLVER.LayoutSemantic, int> requiredVertexBufferMembers =
+                    new Dictionary<FLVER.LayoutSemantic, int>();
+
+                foreach (var buff in defaultBufferDeclaration.Buffers)
+                {
+                    foreach (var m in buff)
+                    {
+                        if (!requiredVertexBufferMembers.ContainsKey(m.Semantic))
+                            requiredVertexBufferMembers.Add(m.Semantic, 0);
+                        requiredVertexBufferMembers[m.Semantic]++;
+                    }
+
+                    int nextLayoutIndex = flver.BufferLayouts.Count;
+                    flver.BufferLayouts.Add(buff);
+                    var vertBuffer = new FLVER2.VertexBuffer(nextLayoutIndex);
+                    flverMesh.VertexBuffers.Add(vertBuffer);
+                }
+
+
+
 
                 flverMesh.Vertices = new List<FLVER.Vertex>(mesh.VertexCount);
 
@@ -178,8 +276,16 @@ namespace SoulsAssetPipeline.FLVERImporting
                         tangentCapacity: mesh.HasTangentBasis ? 1 : 0, 
                         colorCapacity: mesh.VertexColorChannelCount);
 
-                    newVert.Position = System.Numerics.Vector3.Transform(mesh.Vertices[i].ToNumerics(), flverSceneMatrix);
-                    newVert.Normal = System.Numerics.Vector3.TransformNormal(mesh.Normals[i].ToNumerics(), flverSceneMatrix);
+                    newVert.Position = NVector3.Transform(mesh.Vertices[i].ToNumerics(), flverSceneMatrix);
+
+                    flver.Header.UpdateBoundingBox(newVert.Position);
+                    if (flverMesh.BoundingBox != null)
+                        flverMesh.UpdateBoundingBox(newVert.Position);
+
+                    newVert.Normal = NVector3.TransformNormal(mesh.Normals[i].ToNumerics(), flverSceneMatrix);
+
+                    //TODO: TEST THIS AGAINST OTHER GAMES ETC
+                    newVert.NormalW = 127;
 
                     if (mesh.HasTangentBasis)
                     {
@@ -188,14 +294,17 @@ namespace SoulsAssetPipeline.FLVERImporting
                         var bitanXYZ = mesh.BiTangents[i];
                         //TODO: Check Bitangent W calculation
                         var bitanW = Vector3D.Dot(Vector3D.Cross(tan, mesh.Normals[i]), bitanXYZ) >= 0 ? 1 : -1;
-                        var bitanXYZTransformed = System.Numerics.Vector3.TransformNormal(bitanXYZ.ToNumerics(), flverSceneMatrix);
+                        var bitanXYZTransformed = NVector3.TransformNormal(bitanXYZ.ToNumerics(), flverSceneMatrix);
                         newVert.Tangents.Add(new System.Numerics.Vector4(bitanXYZTransformed, bitanW));
+                        //TODO: CHECK THIS AND SEE WTF IT EVEN IS SUPPOSED TO BE
+                        newVert.Bitangent = new System.Numerics.Vector4(
+                            NVector3.TransformNormal(tan.ToNumerics(), flverSceneMatrix), 0);
                     }
                     
                     for (int j = 0; j < meshUVCount; j++)
                     {
                         var uv = mesh.TextureCoordinateChannels[j][i];
-                        newVert.UVs.Add(new System.Numerics.Vector3(uv.X, 1 - uv.Y, uv.Z));
+                        newVert.UVs.Add(new NVector3(uv.X, 1 - uv.Y, uv.Z));
                     }
 
                     for (int j = 0; j < mesh.VertexColorChannelCount; j++)
@@ -208,19 +317,32 @@ namespace SoulsAssetPipeline.FLVERImporting
                         newVert.BoneIndices[j] = -1;
                     }
 
+                    newVert.EnsureLayoutMembers(requiredVertexBufferMembers);
+
                     flverMesh.Vertices.Add(newVert);
                 }
+
+                // Old versions used a list of relative bone indices.
+                if (flver.Header.Version <= 0x2000D)
+                {
+                    foreach (var bone in mesh.Bones)
+                    {
+                        var boneIndex = flver.Bones.FindIndex(b => b.Name == bone.Name);
+
+                        if (!flverMesh.BoneIndices.Contains(boneIndex))
+                            flverMesh.BoneIndices.Add(boneIndex);
+                    }
+
+                    flverMesh.BoneIndices = flverMesh.BoneIndices.OrderBy(idx => idx).ToList();
+                }
+
 
                 foreach (var bone in mesh.Bones)
                 {
                     var boneIndex = flver.Bones.FindIndex(b => b.Name == bone.Name);
 
-                    // Old versions used a list of relative bone indices.
-                    if (flver.Header.Version <= 0x2000D)
-                    {
-                        if (!flverMesh.BoneIndices.Contains(boneIndex))
-                            flverMesh.BoneIndices.Add(boneIndex);
-                    }
+                    // Mark bone as not-dummied-out since there is geometry skinned to it.
+                    flver.Bones[boneIndex].Unk3C = 0;
                     
                     int GetNextAvailableBoneSlotOfVert(int vertIndex)
                     {
@@ -241,9 +363,10 @@ namespace SoulsAssetPipeline.FLVERImporting
                         int boneSlot = GetNextAvailableBoneSlotOfVert(weight.VertexID);
                         if (boneSlot >= 0)
                         {
-                            flverMesh.Vertices[weight.VertexID].BoneIndices[boneSlot] =
-                                flver.Header.Version <= 0x2000D ? flverMesh.BoneIndices.IndexOf(boneIndex) : boneIndex;
+                            var indexToAssign = flver.Header.Version <= 0x2000D ? flverMesh.BoneIndices.IndexOf(boneIndex) : boneIndex;
+                            flverMesh.Vertices[weight.VertexID].BoneIndices[boneSlot] = indexToAssign;
                             flverMesh.Vertices[weight.VertexID].BoneWeights[boneSlot] = weight.Weight;
+                            flver.Bones[boneIndex].UpdateBoundingBox(flver.Bones, flverMesh.Vertices[weight.VertexID].Position);
                         }
                         else
                         {
@@ -260,10 +383,18 @@ namespace SoulsAssetPipeline.FLVERImporting
                         flverMesh.Vertices[i].BoneWeights[2] + 
                         flverMesh.Vertices[i].BoneWeights[3]);
 
-                    flverMesh.Vertices[i].BoneWeights[0] = flverMesh.Vertices[i].BoneWeights[0] * weightMult;
-                    flverMesh.Vertices[i].BoneWeights[1] = flverMesh.Vertices[i].BoneWeights[1] * weightMult;
-                    flverMesh.Vertices[i].BoneWeights[2] = flverMesh.Vertices[i].BoneWeights[2] * weightMult;
-                    flverMesh.Vertices[i].BoneWeights[3] = flverMesh.Vertices[i].BoneWeights[3] * weightMult;
+                    for (int j = 0; j < 4; j++)
+                    {
+                        //flverMesh.Vertices[i].BoneWeights[j] = flverMesh.Vertices[i].BoneWeights[j] * weightMult;
+                        if (flverMesh.Vertices[i].BoneIndices[j] < 0)
+                            flverMesh.Vertices[i].BoneIndices[j] = 0;
+                    }
+
+                    //TODO: TEST THIS AGAINST OTHER GAMES ETC
+                    if (!requiredVertexBufferMembers.ContainsKey(FLVER.LayoutSemantic.BoneIndices))
+                    {
+                        flverMesh.Vertices[i].NormalW = flverMesh.Vertices[i].BoneIndices[0];
+                    }
                 }
 
                 foreach (var face in mesh.Faces)
@@ -275,9 +406,6 @@ namespace SoulsAssetPipeline.FLVERImporting
 
                 flverMesh.FaceSets.Add(flverFaceSet);
                 GenerateLodAndMotionBlurFacesets(flverMesh);
-
-                flverMesh.VertexBuffers.Add(flverVertBuffer);
-                flver.BufferLayouts.Add(flverBufferLayout);
 
                 flver.Meshes.Add(flverMesh);
             }

@@ -2,20 +2,131 @@
 using SoulsFormats;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
+using NMatrix = System.Numerics.Matrix4x4;
+using NVector3 = System.Numerics.Vector3;
+using NQuaternion = System.Numerics.Quaternion;
 
 namespace SoulsAssetPipeline.FLVERImporting
 {
     public static class FLVERImportHelpers
     {
-       
+        public static void UpdateBoundingBox(this FLVER2.FLVERHeader header, NVector3 vertexPos)
+        {
+            var minX = Math.Min(header.BoundingBoxMin.X, vertexPos.X);
+            var minY = Math.Min(header.BoundingBoxMin.Y, vertexPos.Y);
+            var minZ = Math.Min(header.BoundingBoxMin.Z, vertexPos.Z);
+            var maxX = Math.Max(header.BoundingBoxMax.X, vertexPos.X);
+            var maxY = Math.Max(header.BoundingBoxMax.Y, vertexPos.Y);
+            var maxZ = Math.Max(header.BoundingBoxMax.Z, vertexPos.Z);
+            header.BoundingBoxMin = new NVector3(minX, minY, minZ);
+            header.BoundingBoxMax = new NVector3(maxX, maxY, maxZ);
+        }
 
-        
+        public static void UpdateBoundingBox(this FLVER2.Mesh mesh, NVector3 vertexPos)
+        {
+            var minX = Math.Min(mesh.BoundingBox.Min.X, vertexPos.X);
+            var minY = Math.Min(mesh.BoundingBox.Min.Y, vertexPos.Y);
+            var minZ = Math.Min(mesh.BoundingBox.Min.Z, vertexPos.Z);
+            var maxX = Math.Max(mesh.BoundingBox.Max.X, vertexPos.X);
+            var maxY = Math.Max(mesh.BoundingBox.Max.Y, vertexPos.Y);
+            var maxZ = Math.Max(mesh.BoundingBox.Max.Z, vertexPos.Z);
+            mesh.BoundingBox.Min = new NVector3(minX, minY, minZ);
+            mesh.BoundingBox.Max = new NVector3(maxX, maxY, maxZ);
+        }
 
-        
+        public static void UpdateBoundingBox(this FLVER.Bone b, List<FLVER.Bone> bones, NVector3 vertexPos)
+        {
+            var boneAbsoluteMatrix = b.GetAbsoluteNMatrix(bones);
+            
+            if (NMatrix.Invert(boneAbsoluteMatrix, out NMatrix invertexBoneMat))
+            {
+                var posForBBox = NVector3.Transform(vertexPos, invertexBoneMat);
 
-        public static System.Numerics.Vector3 GetFlverBoneEulerFromQuaternion(Quaternion q)
+                var minX = Math.Min(b.BoundingBoxMin.X, posForBBox.X);
+                var minY = Math.Min(b.BoundingBoxMin.Y, posForBBox.Y);
+                var minZ = Math.Min(b.BoundingBoxMin.Z, posForBBox.Z);
+                var maxX = Math.Max(b.BoundingBoxMax.X, posForBBox.X);
+                var maxY = Math.Max(b.BoundingBoxMax.Y, posForBBox.Y);
+                var maxZ = Math.Max(b.BoundingBoxMax.Z, posForBBox.Z);
+
+                b.BoundingBoxMin = new NVector3(minX, minY, minZ);
+                b.BoundingBoxMax = new NVector3(maxX, maxY, maxZ);
+            }
+            //ErrorTODO: when this fails, else {}
+        }
+
+        public static NMatrix GetNMatrix(this FLVER.Bone b)
+        {
+            return NMatrix.CreateScale(b.Scale) *
+                NMatrix.CreateRotationX(b.Rotation.X) *
+                NMatrix.CreateRotationZ(b.Rotation.Z) *
+                NMatrix.CreateRotationY(b.Rotation.Y) *
+                NMatrix.CreateTranslation(b.Translation);
+        }
+
+        public static FLVER.Bone GetParent(this FLVER.Bone b, List<FLVER.Bone> bones)
+        {
+            if (b.ParentIndex >= 0 && b.ParentIndex < bones.Count)
+                return bones[b.ParentIndex];
+            else
+                return null;
+        }
+
+        public static NMatrix GetAbsoluteNMatrix(this FLVER.Bone b, List<FLVER.Bone> bones)
+        {
+            NMatrix result = NMatrix.Identity;
+            var parentBone = b;
+            while (parentBone != null)
+            {
+                var m = parentBone.GetNMatrix();
+                result *= m;
+                parentBone = parentBone.GetParent(bones);
+            }
+            return result;
+        }
+
+        public static void EnsureLayoutMembers(this FLVER.Vertex v, Dictionary<FLVER.LayoutSemantic, int> members)
+        {
+            foreach (var m in members)
+            {
+                if (m.Key == FLVER.LayoutSemantic.Tangent)
+                {
+                    while (v.Tangents.Count < m.Value)
+                        v.Tangents.Add(v.Tangents.Count > 0 ? v.Tangents[0] : System.Numerics.Vector4.Zero);
+                }
+                else if (m.Key == FLVER.LayoutSemantic.VertexColor)
+                {
+                    while (v.Colors.Count < m.Value)
+                        v.Colors.Add(v.Colors.Count > 0 ? v.Colors[0] : new FLVER.VertexColor(0, 0, 0, 0));
+                }
+                else if (m.Key == FLVER.LayoutSemantic.UV)
+                {
+                    while (v.UVs.Count <= m.Value)
+                        v.UVs.Add(v.UVs.Count > 0 ? v.UVs[0] : NVector3.Zero);
+                }
+            }
+        }
+
+
+        public static NVector3 GetFlverBoneEulerFromQuaternion_TypeB(Quaternion quat)
+        {
+            //This is the code from
+            //http://www.mawsoft.com/blog/?p=197
+            var rotation = quat;
+            double q0 = rotation.W;
+            double q1 = rotation.Y;
+            double q2 = rotation.X;
+            double q3 = rotation.Z;
+
+            NVector3 radAngles = new NVector3();
+            radAngles.Y = (float)Math.Atan2(2 * (q0 * q1 + q2 * q3), 1 - 2 * (Math.Pow(q1, 2) + Math.Pow(q2, 2)));
+            radAngles.X = (float)Math.Asin(2 * (q0 * q2 - q3 * q1));
+            radAngles.Z = (float)Math.Atan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (Math.Pow(q2, 2) + Math.Pow(q3, 2)));
+
+            return radAngles;
+        }
+
+        public static NVector3 GetFlverBoneEulerFromQuaternion(Quaternion q)
         {
             // Store the Euler angles in radians
             double yaw;
@@ -52,25 +163,46 @@ namespace SoulsAssetPipeline.FLVERImporting
                 roll = Math.Atan2(2.0 * q.X * q.W - 2.0 * q.Y * q.Z, -sqx + sqy - sqz + sqw);
             }
 
-            return new System.Numerics.Vector3((float)pitch, (float)yaw, (float)roll);
+            return new NVector3((float)pitch, (float)yaw, (float)roll);
         }
 
 
         public struct FLVERBoneTransform
         {
-            public System.Numerics.Vector3 Translation;
-            public System.Numerics.Vector3 Rotation;
-            public System.Numerics.Vector3 Scale;
+            public NVector3 Translation;
+            public NVector3 Rotation;
+            public NVector3 Scale;
 
-            public static FLVERBoneTransform FromMatrix4x4(Matrix4x4 m, System.Numerics.Matrix4x4 flverSceneMatrix)
+            public static FLVERBoneTransform FromMatrix4x4(Matrix4x4 m)
             {
                 var result = new FLVERBoneTransform();
                 m.Decompose(out Vector3D s, out Quaternion rq, out Vector3D t);
-                result.Translation = System.Numerics.Vector3.Transform(t.ToNumerics(), flverSceneMatrix);
+
+                result.Translation = t.ToNumerics();
+                result.Translation.X = -result.Translation.X;
                 result.Scale = s.ToNumerics();
-                var transformedQuat = rq.ToNumerics() * System.Numerics.Quaternion.CreateFromRotationMatrix(flverSceneMatrix);
-                result.Rotation = GetFlverBoneEulerFromQuaternion(
-                    new Quaternion(transformedQuat.X, transformedQuat.Y, transformedQuat.Z, transformedQuat.W));
+
+                var quatB = rq.ToNumerics();
+                var angle = 2 * Math.Acos(quatB.W);
+                var s2 = Math.Sqrt(1.0 - quatB.W * quatB.W);
+                NVector3 axis;
+                if (s2 < 0.001)
+                {
+                    axis.X = quatB.X;
+                    axis.Y = quatB.Y;
+                    axis.Z = quatB.Z;
+                }
+                else
+                {
+                    axis.X = (float)(quatB.X / s2);
+                    axis.Y = (float)(quatB.Y / s2);
+                    axis.Z = (float)(quatB.Z / s2);
+                }
+                axis.X = -axis.X;
+                NQuaternion quat = NQuaternion.CreateFromAxisAngle(axis, (float)-angle);
+
+                result.Rotation = SapMath.MatrixToEulerXZY(NMatrix.CreateFromQuaternion(quat));
+
                 return result;
             }
         }
@@ -82,11 +214,13 @@ namespace SoulsAssetPipeline.FLVERImporting
         }
 
         public static FLVERMetaskeleton GenerateFlverMetaskeletonFromRootNode(
-            Node rootNode, Matrix4x4 rootNodeAbsoluteMatrix, System.Numerics.Matrix4x4 flverSceneMatrix)
+            Node rootNode, Matrix4x4 rootNodeAbsoluteMatrix, float importScale, bool convertFromZUp)
         {
             var bonesAssimp = new List<Node>();
             var skel = new FLVERMetaskeleton();
             var dummyAttachBoneNames = new List<string>();
+
+            NMatrix matrixScale = NMatrix.CreateScale(importScale, importScale, importScale);
 
             // Returns index of bone in master bone list if boneNode is a bone.
             // Returns -1 if boneNode is a DummyPoly (denoted with a node name starting with "DUMMY_POLY").
@@ -94,14 +228,18 @@ namespace SoulsAssetPipeline.FLVERImporting
             {
                 short parentBoneIndex = (short)(bonesAssimp.IndexOf(parentBoneNode));
 
-                var thisNodeAbsoluteMatrix = boneNode.Transform * parentAbsoluteMatrix;
+                var thisNodeAbsoluteMatrix = parentAbsoluteMatrix * boneNode.Transform;
+
+                var boneTrans = FLVERBoneTransform.FromMatrix4x4(boneNode.Transform);
 
                 if (boneNode.Name.StartsWith("DUMMY_POLY"))
                 {
+                    // TODO
+
                     thisNodeAbsoluteMatrix.Decompose(out Vector3D dummyScale, out Quaternion dummyQuat, out Vector3D dummyTranslation);
                     var dmy = new FLVER.Dummy();
                     dmy.ParentBoneIndex = parentBoneIndex;
-                    dmy.Position = System.Numerics.Vector3.Transform(dummyTranslation.ToNumerics(), flverSceneMatrix);
+                    dmy.Position = dummyTranslation.ToNumerics();
 
                     // Format: "DUMMY_POLY|<RefID>|<AttachBoneName>"
                     // Example: "DUMMY_POLY|220|Spine1"
@@ -118,11 +256,13 @@ namespace SoulsAssetPipeline.FLVERImporting
                     //NOTE: Maybe this should be specifiable? I forget what the point of false is here.
                     dmy.UseUpwardVector = true;
 
-                    var sceneRotation = (dummyQuat.ToNumerics() * System.Numerics.Quaternion.CreateFromRotationMatrix(flverSceneMatrix));
+                    var sceneRotation = NMatrix.CreateRotationX(boneTrans.Rotation.X) *
+                        NMatrix.CreateRotationZ(boneTrans.Rotation.Z) *
+                        NMatrix.CreateRotationY(boneTrans.Rotation.Y);
 
-                    dmy.Upward = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(0, 1, 0), sceneRotation);
+                    dmy.Upward = NVector3.Transform(new NVector3(0, 1, 0), sceneRotation);
                     //TODO: Check if forward vector3 should be 1 or -1;
-                    dmy.Forward = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(0, 0, 1), sceneRotation);
+                    dmy.Forward = NVector3.Transform(new NVector3(0, 0, 1), sceneRotation);
 
                     skel.DummyPoly.Add(dmy);
 
@@ -140,15 +280,9 @@ namespace SoulsAssetPipeline.FLVERImporting
                         flverBone.ParentIndex = parentBoneIndex;
 
                     flverBone.Name = boneNode.Name;
-                    flverBone.BoundingBoxMin = System.Numerics.Vector3.One * 0.05f;
-                    flverBone.BoundingBoxMax = System.Numerics.Vector3.One * -0.05f;
-
-                    var boneTrans = FLVERBoneTransform.FromMatrix4x4(boneNode.Transform
-                        // If this is the topmost bone in heirarchy, apply transform of whole skeleton.
-                        * (parentBoneNode == null ? rootNodeAbsoluteMatrix : Matrix4x4.Identity),
-                        flverSceneMatrix);
-
-                    flverBone.Translation = boneTrans.Translation;
+                    flverBone.BoundingBoxMin = new NVector3(float.MaxValue, float.MaxValue, float.MaxValue);
+                    flverBone.BoundingBoxMax = new NVector3(float.MinValue, float.MinValue, float.MinValue);
+                    flverBone.Translation = boneTrans.Translation * importScale;
                     flverBone.Rotation = boneTrans.Rotation;
                     flverBone.Scale = boneTrans.Scale;
 
@@ -194,7 +328,24 @@ namespace SoulsAssetPipeline.FLVERImporting
             //if (rootNode.Children == null)
             //    throw new InvalidDataException("Assimp scene has no heirarchy.");
 
-            AddBone(rootNode.Children[0], null, rootNodeAbsoluteMatrix);
+            var root = rootNode;
+            var master = root.Children[0];
+            foreach (var c in root.Children)
+            {
+                AddBone(c, null, root.Transform * rootNodeAbsoluteMatrix);
+            }
+            
+            // Apply parent bone transforms to DummyPoly
+            foreach (var d in skel.DummyPoly)
+            {
+                if (d.ParentBoneIndex >= 0)
+                {
+                    var parentMat = skel.Bones[d.ParentBoneIndex].GetAbsoluteNMatrix(skel.Bones);
+                    d.Position = NVector3.Transform(d.Position, parentMat);
+                    d.Upward = NVector3.TransformNormal(d.Upward, parentMat);
+                    d.Forward = NVector3.TransformNormal(d.Forward, parentMat);
+                }
+            }
 
             return skel;
         }
