@@ -25,6 +25,27 @@ namespace SoulsAssetPipeline
 
         public static NMatrix ZUpToYUpNMatrix => NMatrix.CreateRotationZ(Pi) * NMatrix.CreateRotationX(-PiOver2);
 
+        public static NQuaternion MirrorQuat(NQuaternion quatB)
+        {
+            var angle = 2 * Math.Acos(quatB.W);
+            var s2 = Math.Sqrt(1.0 - quatB.W * quatB.W);
+            NVector3 axis;
+            if (s2 < 0.001)
+            {
+                axis.X = quatB.X;
+                axis.Y = quatB.Y;
+                axis.Z = quatB.Z;
+            }
+            else
+            {
+                axis.X = (float)(quatB.X / s2);
+                axis.Y = (float)(quatB.Y / s2);
+                axis.Z = (float)(quatB.Z / s2);
+            }
+            axis.X = -axis.X;
+            return NQuaternion.CreateFromAxisAngle(axis, (float)-angle);
+        }
+
         public enum EulerOrder
         {
             ZYX, ZYZ, ZXY, ZXZ, YXZ, YXY, YZX, YZY, XYZ, XYX, XZY, XZX

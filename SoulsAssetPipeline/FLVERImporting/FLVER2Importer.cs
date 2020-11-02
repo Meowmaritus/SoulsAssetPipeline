@@ -63,11 +63,23 @@ namespace SoulsAssetPipeline.FLVERImporting
             public FLVER2.FLVERHeader FlverHeader { get; set; } = new FLVER2.FLVERHeader();
 
             public SoulsGames Game { get; set; } = SoulsGames.None;
+
+            public string RootNodeName { get; set; } = "root";
+
+            //TODO: Make this metaskeleton or something cuz currently it will have empty dummypoly list if you do this.
+            public List<FLVER.Bone> SkeletonTransformsOverride = null;
+
+            public NMatrix SceneCorrectMatrix = NMatrix.Identity;
+
+            public Dictionary<string, string> BoneNameRemapper = null;
         }
 
         public ImportedFLVER2Model ImportFBX(string fbxPath, FLVER2ImportSettings settings)
         {
-            var fbx = context.ImportFile(fbxPath, PostProcessSteps.CalculateTangentSpace);
+            var fbx = context.ImportFile(fbxPath, PostProcessSteps.CalculateTangentSpace 
+                | PostProcessSteps.LimitBoneWeights 
+                | PostProcessSteps.GlobalScale
+                );
             return ImportFromAssimpScene(fbx, settings);
         }
 
@@ -95,18 +107,31 @@ namespace SoulsAssetPipeline.FLVERImporting
 
             if (settings.ConvertFromZUp)
             {
-                flverSceneMatrix *= SapMath.ZUpToYUpNMatrix;
+                //flverSceneMatrix *= SapMath.ZUpToYUpNMatrix;
 
             }
 
-            flverSceneMatrix *= NMatrix.CreateScale(1, 1, -1);
+            //flverSceneMatrix *= NMatrix.CreateRotationY(SapMath.Pi);
+
+            flverSceneMatrix *= settings.SceneCorrectMatrix;
 
 
-            var skeletonRootNode = AssimpUtilities.FindRootNode(scene, "root", out Matrix4x4 skeletonRootNodeMatrix);
+
+            flverSceneMatrix *= NMatrix.CreateScale(1, 1, 1);
+
+
+            var coordMat = AssimpUtilities.GetSceneCoordSystemMatrix(scene);
+
+            scene.RootNode.Transform *= coordMat;
+
+            var skeletonRootNode = AssimpUtilities.FindRootNode(scene, settings.RootNodeName, out Matrix4x4 skeletonRootNodeMatrix);
+
+
             var metaskeleton = FLVERImportHelpers.GenerateFlverMetaskeletonFromRootNode(
-                skeletonRootNode, skeletonRootNodeMatrix, settings.SceneScale, settings.ConvertFromZUp);
+                skeletonRootNode, skeletonRootNodeMatrix, settings.SceneScale);
 
             flver.Bones = metaskeleton.Bones;
+            flver.Dummies = metaskeleton.DummyPoly;
 
             foreach (var b in flver.Bones)
             {
@@ -114,14 +139,22 @@ namespace SoulsAssetPipeline.FLVERImporting
                 b.Unk3C = 1;
             }
 
-            flver.Dummies = metaskeleton.DummyPoly;
+            var usesIndirectBones = flver.Header.Version <= 0x20010;
+             
+            if (settings.SkeletonTransformsOverride != null)
+            {
+                flver.Bones = settings.SkeletonTransformsOverride;
+            }
+
+
+            
 
             var flverMaterialList = new List<FLVER2.Material>();
 
             foreach (var material in scene.Materials)
             {
                 string[] materialNameSplit = material.Name.Split('|');
-                string mtd = materialNameSplit[1].Trim().ToLower() + ".mtd";
+                string mtd = materialNameSplit.Length > 1 ? materialNameSplit[1].Trim().ToLower() + ".mtd" : null;
 
                 // If MTD doesn't exist, use original
                 mtd = MaterialInfoBankPerGame[settings.Game].FallbackToDefaultMtdIfNecessary(mtd, Logger);
@@ -133,15 +166,19 @@ namespace SoulsAssetPipeline.FLVERImporting
                 void AddTextureSlot(TextureSlot slot, string ingameSlot)
                 {
                     flverMaterial.Textures.Add(new FLVER2.Texture(type: ingameSlot,
-                    path: Path.GetFullPath(slot.FilePath),
+                    path: slot.FilePath != null ? Path.GetFullPath(slot.FilePath) : "",
                     scale: System.Numerics.Vector2.One,
                         1, true, 0, 0, 0));
 
                     string texName = Path.GetFileNameWithoutExtension(slot.FilePath);
-                    byte[] texData = scene.GetEmbeddedTexture(slot.FilePath).CompressedData;
-                    var ddsFormat = TPFTextureFormatFinder.GetTpfFormatFromDdsBytes(texData);
+                    byte[] texData = scene.GetEmbeddedTexture(slot.FilePath)?.CompressedData;
 
-                    result.Textures.Add(new TPF.Texture(texName, format: ddsFormat, flags1: 0, bytes: texData));
+                    if (texData != null)
+                    {
+                        var ddsFormat = TPFTextureFormatFinder.GetTpfFormatFromDdsBytes(texData);
+
+                        result.Textures.Add(new TPF.Texture(texName, format: ddsFormat, flags1: 0, bytes: texData));
+                    }
                 }
 
                 var materialDefinition = MaterialInfoBankPerGame[settings.Game].MaterialDefs[mtd];
@@ -187,6 +224,40 @@ namespace SoulsAssetPipeline.FLVERImporting
                 flverMaterialList.Add(flverMaterial);
             }
 
+            //var properBoneParentRegistry = new Dictionary<Bone, string>();
+
+            //foreach (var mesh in scene.Meshes)
+            //{
+            //    foreach (var b in mesh.Bones)
+            //    {
+            //        bool alreadyRegistered = false;
+            //        foreach (var bone in properBoneParentRegistry.Keys)
+            //        {
+            //            if (bone.Name == b.Name)
+            //            {
+            //                alreadyRegistered = true;
+            //                break;
+            //            }
+            //        }
+            //        if (alreadyRegistered)
+            //            continue;
+            //        mesh.
+            //        properBoneParentRegistry.Add(b, b.)
+            //    }
+            //}
+
+            if (settings.BoneNameRemapper != null)
+            {
+                foreach (var bn in settings.BoneNameRemapper)
+                {
+                    var bone = flver.Bones.FindIndex(b => b.Name == bn.Key);
+                    if (bone >= 0)
+                    {
+                        flver.Bones[bone].Name = bn.Value;
+                    }
+                }
+            }
+
             foreach (var mesh in scene.Meshes)
             {
                 var flverMesh = new FLVER2.Mesh();
@@ -199,26 +270,26 @@ namespace SoulsAssetPipeline.FLVERImporting
 
 
                 // Register mesh transform bone:
-                //flverMesh.DefaultBoneIndex = flver.Bones.Count;
-                //int flverLastRootBoneIndex = flver.Bones.FindLastIndex(b => b.ParentIndex == -1);
-                //// Register this new bone as a sibling.
-                //if (flverLastRootBoneIndex >= 0)
-                //    flver.Bones[flverLastRootBoneIndex].NextSiblingIndex = (short)flverMesh.DefaultBoneIndex;
-                //flver.Bones.Add(new FLVER.Bone()
-                //{
-                //    Name = mesh.Name,
-                //    Translation = NVector3.Zero,
-                //    Rotation = NVector3.Zero,
-                //    Scale = NVector3.One,
-                //    BoundingBoxMin = NVector3.One * -0.05f,
-                //    BoundingBoxMax = NVector3.One * 0.05f,
-                //    // Cross-register sibling from above.
-                //    PreviousSiblingIndex = (short)flverLastRootBoneIndex,
-                //    NextSiblingIndex = -1,
-                //    ParentIndex = -1,
-                //    ChildIndex = -1,
-                //    Unk3C = 1,
-                //});
+                flverMesh.DefaultBoneIndex = flver.Bones.Count;
+                int flverLastRootBoneIndex = flver.Bones.FindLastIndex(b => b.ParentIndex == -1);
+                // Register this new bone as a sibling.
+                if (flverLastRootBoneIndex >= 0)
+                    flver.Bones[flverLastRootBoneIndex].NextSiblingIndex = (short)flverMesh.DefaultBoneIndex;
+                flver.Bones.Add(new FLVER.Bone()
+                {
+                    Name = mesh.Name,
+                    Translation = NVector3.Zero,
+                    Rotation = NVector3.Zero,
+                    Scale = NVector3.One,
+                    BoundingBoxMin = NVector3.One * -0.05f,
+                    BoundingBoxMax = NVector3.One * 0.05f,
+                    // Cross-register sibling from above.
+                    PreviousSiblingIndex = (short)flverLastRootBoneIndex,
+                    NextSiblingIndex = -1,
+                    ParentIndex = -1,
+                    ChildIndex = -1,
+                    Unk3C = 1,
+                });
 
 
 
@@ -285,7 +356,7 @@ namespace SoulsAssetPipeline.FLVERImporting
                     newVert.Normal = NVector3.TransformNormal(mesh.Normals[i].ToNumerics(), flverSceneMatrix);
 
                     //TODO: TEST THIS AGAINST OTHER GAMES ETC
-                    newVert.NormalW = 127;
+                    //newVert.NormalW = 127;
 
                     if (mesh.HasTangentBasis)
                     {
@@ -323,26 +394,44 @@ namespace SoulsAssetPipeline.FLVERImporting
                 }
 
                 // Old versions used a list of relative bone indices.
-                if (flver.Header.Version <= 0x2000D)
+                //TODO: CHECK IF THIS BREAKS DS3 SOMEHOW
+                //It's here because I noticed DS2 still lists these despite using direct indices.
+                foreach (var bone in mesh.Bones)
                 {
-                    foreach (var bone in mesh.Bones)
-                    {
-                        var boneIndex = flver.Bones.FindIndex(b => b.Name == bone.Name);
+                    var boneIndex = flver.Bones.FindIndex(b => b.Name == bone.Name);
 
-                        if (!flverMesh.BoneIndices.Contains(boneIndex))
-                            flverMesh.BoneIndices.Add(boneIndex);
-                    }
-
-                    flverMesh.BoneIndices = flverMesh.BoneIndices.OrderBy(idx => idx).ToList();
+                    if (!flverMesh.BoneIndices.Contains(boneIndex))
+                        flverMesh.BoneIndices.Add(boneIndex);
                 }
+
+                flverMesh.BoneIndices = flverMesh.BoneIndices.OrderBy(idx => idx).ToList();
+
+
 
 
                 foreach (var bone in mesh.Bones)
                 {
                     var boneIndex = flver.Bones.FindIndex(b => b.Name == bone.Name);
 
+                    if (boneIndex == -1)
+                    {
+                        Logger.LogWarning($"No bone with exact name '{bone.Name}' found. Looking for a bone that starts with that name");
+                        boneIndex = flver.Bones.FindIndex(b => b.Name.StartsWith(bone.Name));
+
+                    }
+
+                    var boneDoesNotExist = false;
+
                     // Mark bone as not-dummied-out since there is geometry skinned to it.
-                    flver.Bones[boneIndex].Unk3C = 0;
+                    if (boneIndex >= 0 && boneIndex < flver.Bones.Count)
+                    {
+                        flver.Bones[boneIndex].Unk3C = 0;
+                    }
+                    else
+                    {
+                        Logger.LogWarning($"Vertex skinned to bone '{bone.Name}' which does NOT exist in the skeleton.");
+                        boneDoesNotExist = true;
+                    }
                     
                     int GetNextAvailableBoneSlotOfVert(int vertIndex)
                     {
@@ -363,14 +452,11 @@ namespace SoulsAssetPipeline.FLVERImporting
                         int boneSlot = GetNextAvailableBoneSlotOfVert(weight.VertexID);
                         if (boneSlot >= 0)
                         {
-                            var indexToAssign = flver.Header.Version <= 0x2000D ? flverMesh.BoneIndices.IndexOf(boneIndex) : boneIndex;
-                            flverMesh.Vertices[weight.VertexID].BoneIndices[boneSlot] = indexToAssign;
-                            flverMesh.Vertices[weight.VertexID].BoneWeights[boneSlot] = weight.Weight;
-                            flver.Bones[boneIndex].UpdateBoundingBox(flver.Bones, flverMesh.Vertices[weight.VertexID].Position);
-                        }
-                        else
-                        {
-                            Console.WriteLine("fatcat");
+                            var indexToAssign = usesIndirectBones ? flverMesh.BoneIndices.IndexOf(boneIndex) : boneIndex;
+                            flverMesh.Vertices[weight.VertexID].BoneIndices[boneSlot] = boneDoesNotExist ? 0 : indexToAssign;
+                            flverMesh.Vertices[weight.VertexID].BoneWeights[boneSlot] = boneDoesNotExist ? 0 : weight.Weight;
+                            if (!boneDoesNotExist)
+                                flver.Bones[boneIndex].UpdateBoundingBox(flver.Bones, flverMesh.Vertices[weight.VertexID].Position);
                         }
                     }
                 }
@@ -408,6 +494,20 @@ namespace SoulsAssetPipeline.FLVERImporting
                 GenerateLodAndMotionBlurFacesets(flverMesh);
 
                 flver.Meshes.Add(flverMesh);
+            }
+
+            if (settings.SkeletonTransformsOverride != null)
+            {
+                foreach (var b in flver.Bones)
+                {
+                    var match = settings.SkeletonTransformsOverride.FindIndex(bn => bn.Name == b.Name);
+                    if (match >= 0)
+                    {
+                        b.Translation = settings.SkeletonTransformsOverride[match].Translation;
+                        b.Rotation = settings.SkeletonTransformsOverride[match].Rotation;
+                        b.Scale = settings.SkeletonTransformsOverride[match].Scale;
+                    }
+                }
             }
 
             return result;

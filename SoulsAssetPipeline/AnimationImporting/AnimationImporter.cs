@@ -19,14 +19,14 @@ namespace SoulsAssetPipeline.AnimationImporting
             public HavokAnimationData ExistingHavokAnimationTemplate = null;
             public double ResampleToFramerate = 60;
             public string RootMotionNodeName = "root";
-
+            public bool FlipQuaternionHandedness = false;
         }
 
         public static ImportedAnimation ImportFBX(string fbxPath, AnimationImportSettings settings)
         {
             using (var context = new AssimpContext())
             {
-                var fbx = context.ImportFile(fbxPath, PostProcessSteps.CalculateTangentSpace);
+                var fbx = context.ImportFile(fbxPath, PostProcessSteps.CalculateTangentSpace | PostProcessSteps.GlobalScale);
                 return ImportFromAssimpScene(fbx, settings);
             }
         }
@@ -38,7 +38,8 @@ namespace SoulsAssetPipeline.AnimationImporting
 
             var sceneMatrix = System.Numerics.Matrix4x4.CreateScale(System.Numerics.Vector3.One * settings.SceneScale);
 
-            sceneMatrix *= System.Numerics.Matrix4x4.CreateScale(-1, 1, 1);
+            if (!settings.FlipQuaternionHandedness)
+                sceneMatrix *= System.Numerics.Matrix4x4.CreateScale(-1, 1, 1);
 
             if (settings.ExistingHavokAnimationTemplate == null)
             {
@@ -168,6 +169,9 @@ namespace SoulsAssetPipeline.AnimationImporting
 
                                 float angleOnFrame = (float)Math.Atan2(directionVectorOnFrame.Z, directionVectorOnFrame.X);
 
+                                if (settings.FlipQuaternionHandedness)
+                                    angleOnFrame = -angleOnFrame;
+
                                 result.Frames[frame].RootMotionRotation = angleOnFrame;
                                 // Fill in from the last keyframe to this one
                                 for (int f = lastKeyIndex + 1; f <= Math.Min(frame - 1, result.Frames.Count - 1); f++)
@@ -273,6 +277,12 @@ namespace SoulsAssetPipeline.AnimationImporting
                                     curFrameTransform.Rotation = keyPos.Value.ToNumerics();
                                     curFrameTransform.Rotation.Y *= -1;
                                     curFrameTransform.Rotation.Z *= -1;
+
+                                    if (settings.FlipQuaternionHandedness)
+                                    {
+                                        curFrameTransform.Rotation = SapMath.MirrorQuat(curFrameTransform.Rotation);
+                                    }
+
                                     result.Frames[frame].BoneTransforms[transformIndex] = curFrameTransform;
 
                                     // Fill in from the last keyframe to this one

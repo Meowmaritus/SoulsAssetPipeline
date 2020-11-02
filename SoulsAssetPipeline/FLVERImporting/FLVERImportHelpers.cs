@@ -173,35 +173,30 @@ namespace SoulsAssetPipeline.FLVERImporting
             public NVector3 Rotation;
             public NVector3 Scale;
 
-            public static FLVERBoneTransform FromMatrix4x4(Matrix4x4 m)
+            public static FLVERBoneTransform FromMatrix4x4(Matrix4x4 m, bool applyMemes)
             {
                 var result = new FLVERBoneTransform();
                 m.Decompose(out Vector3D s, out Quaternion rq, out Vector3D t);
 
                 result.Translation = t.ToNumerics();
-                result.Translation.X = -result.Translation.X;
+                if (applyMemes)
+                    result.Translation.X = -result.Translation.X;
+
                 result.Scale = s.ToNumerics();
 
-                var quatB = rq.ToNumerics();
-                var angle = 2 * Math.Acos(quatB.W);
-                var s2 = Math.Sqrt(1.0 - quatB.W * quatB.W);
-                NVector3 axis;
-                if (s2 < 0.001)
+                NMatrix mat = NMatrix.Identity;
+
+                if (applyMemes)
                 {
-                    axis.X = quatB.X;
-                    axis.Y = quatB.Y;
-                    axis.Z = quatB.Z;
+                    NQuaternion quat = SapMath.MirrorQuat(rq.ToNumerics());
+                    mat = NMatrix.CreateFromQuaternion(quat);
                 }
                 else
                 {
-                    axis.X = (float)(quatB.X / s2);
-                    axis.Y = (float)(quatB.Y / s2);
-                    axis.Z = (float)(quatB.Z / s2);
+                    mat = NMatrix.CreateFromQuaternion(new NQuaternion(rq.X, rq.Y, rq.Z, rq.W));
                 }
-                axis.X = -axis.X;
-                NQuaternion quat = NQuaternion.CreateFromAxisAngle(axis, (float)-angle);
 
-                result.Rotation = SapMath.MatrixToEulerXZY(NMatrix.CreateFromQuaternion(quat));
+                result.Rotation = SapMath.MatrixToEulerXZY(mat);
 
                 return result;
             }
@@ -214,7 +209,7 @@ namespace SoulsAssetPipeline.FLVERImporting
         }
 
         public static FLVERMetaskeleton GenerateFlverMetaskeletonFromRootNode(
-            Node rootNode, Matrix4x4 rootNodeAbsoluteMatrix, float importScale, bool convertFromZUp)
+            Node rootNode, Matrix4x4 rootNodeAbsoluteMatrix, float importScale)
         {
             var bonesAssimp = new List<Node>();
             var skel = new FLVERMetaskeleton();
@@ -228,9 +223,12 @@ namespace SoulsAssetPipeline.FLVERImporting
             {
                 short parentBoneIndex = (short)(bonesAssimp.IndexOf(parentBoneNode));
 
-                var thisNodeAbsoluteMatrix = parentAbsoluteMatrix * boneNode.Transform;
+                var thisBoneMatrix = boneNode.Transform;
+                var thisNodeAbsoluteMatrix = thisBoneMatrix * parentAbsoluteMatrix;
+                
 
-                var boneTrans = FLVERBoneTransform.FromMatrix4x4(boneNode.Transform);
+                var boneTrans = FLVERBoneTransform.FromMatrix4x4(
+                    (parentBoneIndex == -1 ? thisNodeAbsoluteMatrix : thisBoneMatrix), false);
 
                 if (boneNode.Name.StartsWith("DUMMY_POLY"))
                 {
@@ -329,12 +327,12 @@ namespace SoulsAssetPipeline.FLVERImporting
             //    throw new InvalidDataException("Assimp scene has no heirarchy.");
 
             var root = rootNode;
-            var master = root.Children[0];
-            foreach (var c in root.Children)
-            {
-                AddBone(c, null, root.Transform * rootNodeAbsoluteMatrix);
-            }
-            
+            //var master = root.Children[0];
+            //foreach (var c in root.Children)
+            //{
+            //    AddBone(c, null, root.Transform * rootNodeAbsoluteMatrix);
+            //}
+            AddBone(root, null, rootNodeAbsoluteMatrix);
             // Apply parent bone transforms to DummyPoly
             foreach (var d in skel.DummyPoly)
             {

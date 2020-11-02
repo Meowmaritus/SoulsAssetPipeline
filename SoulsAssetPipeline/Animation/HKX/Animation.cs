@@ -260,7 +260,7 @@ namespace SoulsAssetPipeline.Animation
                 {
                     // Literally guessing here
                     br.ReadInt64s(3); // Annotations
-                    br.ReadUInt32(); // padding?
+                    //br.ReadUInt32(); // padding?
                 }
 
                 Transforms = new HKArray<Transform>(hkx, section, this, br, variation);

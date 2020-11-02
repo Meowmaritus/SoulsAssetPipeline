@@ -16,13 +16,16 @@ namespace SoulsAssetPipeline.FLVERImporting
 
         public string FallbackToDefaultMtdIfNecessary(string mtd, SapLogger logger)
         {
-            if (MaterialDefs.ContainsKey(mtd))
+            if (mtd != null && MaterialDefs.ContainsKey(mtd))
             {
                 return mtd;
             }
             else
             {
-                logger?.LogWarning($"MTD {mtd} did not exist. Falling back to default, which is '{DefaultFallbackMTDName}'.");
+                if (mtd != null)
+                    logger?.LogWarning($"MTD {mtd} did not exist. Falling back to default, which is '{DefaultFallbackMTDName}'.");
+                else
+                    logger?.LogWarning($"MTD was not specified. Falling back to default, which is '{DefaultFallbackMTDName}'.");
                 return DefaultFallbackMTDName;
             }
         }
