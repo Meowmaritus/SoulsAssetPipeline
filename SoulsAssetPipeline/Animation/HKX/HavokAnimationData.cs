@@ -186,31 +186,52 @@ namespace SoulsAssetPipeline.Animation
 
             if (track.SplinePosition != null)
             {
-                result.Translation.X = track.SplinePosition.GetValueX(frame)
-                    ?? (IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.X);
+                //result.Translation.X = track.SplinePosition.GetValueX(frame)
+                //    ?? (IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.X);
 
-                result.Translation.Y = track.SplinePosition.GetValueY(frame)
-                    ?? (IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y);
+                //result.Translation.Y = track.SplinePosition.GetValueY(frame)
+                //    ?? (IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y);
 
-                result.Translation.Z = track.SplinePosition.GetValueZ(frame)
-                    ?? (IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z);
+                //result.Translation.Z = track.SplinePosition.GetValueZ(frame)
+                //    ?? (IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z);
+
+                result.Translation.X = track.SplinePosition.GetValueX(frame) ?? 0;
+
+                result.Translation.Y = track.SplinePosition.GetValueY(frame) ?? 0;
+
+                result.Translation.Z = track.SplinePosition.GetValueZ(frame) ?? 0;
             }
             else
             {
+                //if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticX))
+                //    result.Translation.X = track.StaticPosition.X;
+                //else
+                //    result.Translation.X = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.X;
+
+                //if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticY))
+                //    result.Translation.Y = track.StaticPosition.Y;
+                //else
+                //    result.Translation.Y = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y;
+
+                //if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticZ))
+                //    result.Translation.Z = track.StaticPosition.Z;
+                //else
+                //    result.Translation.Z = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z;
+
                 if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticX))
                     result.Translation.X = track.StaticPosition.X;
                 else
-                    result.Translation.X = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.X;
+                    result.Translation.X = 0;
 
                 if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticY))
                     result.Translation.Y = track.StaticPosition.Y;
                 else
-                    result.Translation.Y = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Y;
+                    result.Translation.Y = 0;
 
                 if (track.Mask.PositionTypes.Contains(SplineCompressedAnimation.FlagOffset.StaticZ))
                     result.Translation.Z = track.StaticPosition.Z;
                 else
-                    result.Translation.Z = IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z;
+                    result.Translation.Z = 0;
             }
 
             //result.Translation.X = track.SplinePosition?.GetValueX(frame) ?? (IsAdditiveBlend ? 0 : track.StaticPosition.X);

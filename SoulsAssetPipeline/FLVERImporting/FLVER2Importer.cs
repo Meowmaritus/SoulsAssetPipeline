@@ -76,9 +76,19 @@ namespace SoulsAssetPipeline.FLVERImporting
 
         public ImportedFLVER2Model ImportFBX(string fbxPath, FLVER2ImportSettings settings)
         {
-            var fbx = context.ImportFile(fbxPath, PostProcessSteps.CalculateTangentSpace 
+
+            var fbx = context.ImportFile(fbxPath, PostProcessSteps.None
+                | PostProcessSteps.CalculateTangentSpace 
                 | PostProcessSteps.LimitBoneWeights 
                 | PostProcessSteps.GlobalScale
+                | PostProcessSteps.Triangulate
+                //| PostProcessSteps.SortByPrimitiveType
+                //| PostProcessSteps.OptimizeMeshes
+                | PostProcessSteps.FindDegenerates
+                | PostProcessSteps.FindInvalidData
+                | PostProcessSteps.JoinIdenticalVertices
+
+                | PostProcessSteps.ValidateDataStructure
                 );
             return ImportFromAssimpScene(fbx, settings);
         }
@@ -107,7 +117,7 @@ namespace SoulsAssetPipeline.FLVERImporting
 
             if (settings.ConvertFromZUp)
             {
-                //flverSceneMatrix *= SapMath.ZUpToYUpNMatrix;
+                flverSceneMatrix *= SapMath.ZUpToYUpNMatrix;
 
             }
 
@@ -117,7 +127,7 @@ namespace SoulsAssetPipeline.FLVERImporting
 
 
 
-            flverSceneMatrix *= NMatrix.CreateScale(1, 1, 1);
+            flverSceneMatrix *= NMatrix.CreateScale(1, 1, -1);
 
 
             var coordMat = AssimpUtilities.GetSceneCoordSystemMatrix(scene);
@@ -299,12 +309,14 @@ namespace SoulsAssetPipeline.FLVERImporting
                     if (mesh.UVComponentCount[i] > 0)
                         meshUVCount++;
                 }
-
-                
+                if (mesh.PrimitiveType != PrimitiveType.Triangle)
+                {
+                    Console.WriteLine();
+                }
 
                 var flverFaceSet = new FLVER2.FaceSet();
 
-
+                //flverFaceSet.TriangleStrip = true;
 
                 // Handle vertex buffers / layouts:
                 //flverMesh.MaterialIndex = mesh.MaterialIndex;
@@ -483,12 +495,13 @@ namespace SoulsAssetPipeline.FLVERImporting
                     }
                 }
 
-                foreach (var face in mesh.Faces)
-                {
-                    //TODO: See if resets need to be added inbetween or anything.
-                    flverFaceSet.Indices.AddRange(face.Indices);
-                }
+                //foreach (var face in mesh.Faces)
+                //{
+                //    //TODO: See if resets need to be added inbetween or anything.
+                //    flverFaceSet.Indices.AddRange(face.Indices);
+                //}
 
+                flverFaceSet.Indices.AddRange(mesh.GetIndices());
 
                 flverMesh.FaceSets.Add(flverFaceSet);
                 GenerateLodAndMotionBlurFacesets(flverMesh);

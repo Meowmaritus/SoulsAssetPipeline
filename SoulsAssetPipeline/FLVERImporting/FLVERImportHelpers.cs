@@ -228,7 +228,7 @@ namespace SoulsAssetPipeline.FLVERImporting
                 
 
                 var boneTrans = FLVERBoneTransform.FromMatrix4x4(
-                    (parentBoneIndex == -1 ? thisNodeAbsoluteMatrix : thisBoneMatrix), false);
+                    (parentBoneIndex == -1 ? thisNodeAbsoluteMatrix : thisBoneMatrix), true);
 
                 if (boneNode.Name.StartsWith("DUMMY_POLY"))
                 {
