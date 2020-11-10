@@ -78,10 +78,7 @@ namespace SoulsAssetPipeline.Animation.SIBCAM
 
             for (int i = 0; i < NumFoVData; i++)
             {
-                FoVDataList[i].FrameIdx = br.ReadUInt32();
-                FoVDataList[i].FoV = br.ReadSingle();
-                FoVDataList[i].TanIn = br.ReadSingle();
-                FoVDataList[i].TanOut = br.ReadSingle();
+                FoVDataList.Add(new FoVData() { FrameIdx = br.ReadUInt32(), FoV = br.ReadSingle(), TanIn = br.ReadSingle(), TanOut = br.ReadSingle() });
             }
 
             for (int i = 0; i < NumAnimValues; i++)
@@ -97,13 +94,15 @@ namespace SoulsAssetPipeline.Animation.SIBCAM
 
             for (int i = 0; i < NumFrames; i++)
             {
+                CameraFrame CamFrame = new CameraFrame();
                 currFrameRef = FrameRefs[i];
-                CameraAnimation[i].Index = currFrameRef.Index;
-                CameraAnimation[i].Position = AnimationData[currFrameRef.PositionIndex];
-                CameraAnimation[i].PositionDiffPrev = AnimationData[currFrameRef.RotationDiffPrevIndex1];
-                CameraAnimation[i].Rotation = AnimationData[currFrameRef.RotationIndex];
-                CameraAnimation[i].RotationDiffPrev = AnimationData[currFrameRef.RotationDiffPrevIndex1];
-                CameraAnimation[i].Scale = AnimationData[currFrameRef.ScaleIndex];
+                CamFrame.Index = currFrameRef.Index;
+                CamFrame.Position = AnimationData[currFrameRef.PositionIndex];
+                CamFrame.PositionDiffPrev = AnimationData[currFrameRef.RotationDiffPrevIndex1];
+                CamFrame.Rotation = AnimationData[currFrameRef.RotationIndex];
+                CamFrame.RotationDiffPrev = AnimationData[currFrameRef.RotationDiffPrevIndex1];
+                CamFrame.Scale = AnimationData[currFrameRef.ScaleIndex];
+                CameraAnimation.Add(CamFrame);
             }
 
         }
