@@ -189,6 +189,12 @@ namespace SoulsAssetPipeline.Animation
             /// </summary>
             public int Type { get; private set; }
 
+
+            /// <summary>
+            /// TAE Event Group which contains this event.
+            /// </summary>
+            public TAE.EventGroup Group { get; set; }
+
             /// <summary>
             /// An unknown 32-bit integer following the event type.
             /// So far confirmed to be used in SOTFS and SDT

@@ -289,6 +289,18 @@ namespace SoulsAssetPipeline.Animation
                     }
                     br.StepOut();
 
+                    foreach (var grp in EventGroups)
+                    {
+                        foreach (var idx in grp.indices)
+                        {
+                            var ev = Events[idx];
+                            if (ev.Group == null)
+                                ev.Group = grp;
+                            else
+                                throw new Exception("TAE Event in multiple groups...");
+                        }
+                    }
+
                     br.StepIn(animFileOffset);
                     {
                         var miniHeaderType = br.ReadEnum32<MiniHeaderType>();
@@ -386,6 +398,13 @@ namespace SoulsAssetPipeline.Animation
             internal void WriteBody(BinaryWriterEx bw, int i, TAEFormat format)
             {
                 bw.FillVarint($"AnimationOffset{i}", bw.Position);
+
+                EventGroups.Clear();
+                foreach (var ev in Events)
+                {
+                    if (ev.Group != null && !EventGroups.Contains(ev.Group))
+                        EventGroups.Add(ev.Group);
+                }
 
                 if (format == TAEFormat.DS1)
                 {
@@ -523,7 +542,10 @@ namespace SoulsAssetPipeline.Animation
                 {
                     bw.FillVarint($"EventGroupHeadersOffset{i}", bw.Position);
                     for (int j = 0; j < EventGroups.Count; j++)
+                    {
+                        EventGroups[j].indices = Events.Where(ev => ev.Group == EventGroups[j]).Select(ev => Events.IndexOf(ev)).ToList();
                         EventGroups[j].WriteHeader(bw, i, j, format);
+                    }
                 }
                 else
                 {

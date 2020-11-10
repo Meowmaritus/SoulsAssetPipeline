@@ -19,9 +19,14 @@ namespace SoulsAssetPipeline.Animation
             /// <summary>
             /// Unknown.
             /// </summary>
-            public long GroupType;
+            public long GroupType { get; set; }
 
-            public EventGroupData GroupData = null;
+            public EventGroup()
+            {
+
+            }
+
+            public EventGroupData GroupData { get; set; } = null;
 
             public enum EventGroupDataType : long
             {
@@ -31,9 +36,9 @@ namespace SoulsAssetPipeline.Animation
                 GroupData192 = 192,
             }
 
-            public abstract class EventGroupData
+            public class EventGroupData
             {
-                public abstract int ForGroupType { get; }
+                internal virtual int GetGroupTypeThisIsFor() => -1;
                 public virtual void ReadInner(BinaryReaderEx br)
                 {
 
@@ -65,17 +70,19 @@ namespace SoulsAssetPipeline.Animation
 
                 public class GroupData0 : EventGroupData
                 {
-                    public override int ForGroupType => 0;
+                    internal override int GetGroupTypeThisIsFor() => 0;
                 }
 
                 public class GroupData16 : EventGroupData
                 {
-                    public override int ForGroupType => 16;
+                    internal override int GetGroupTypeThisIsFor() => 16;
                 }
 
                 public class ApplyToSpecificCutsceneEntity : EventGroupData
                 {
-                    public override int ForGroupType => 128;
+
+                    internal override int GetGroupTypeThisIsFor() => 128;
+
                     public enum EntityTypes : ushort
                     {
                         Character = 0,
@@ -83,11 +90,11 @@ namespace SoulsAssetPipeline.Animation
                         MapPiece = 2,
                         DummyNode = 4,
                     }
-                    public EntityTypes CutsceneEntityType = EntityTypes.Character;
-                    public short CutsceneEntityIDPart1 = 0;
-                    public short CutsceneEntityIDPart2 = 0;
-                    public sbyte Area = -1;
-                    public sbyte Block = -1;
+                    public EntityTypes CutsceneEntityType { get; set; } = EntityTypes.Character;
+                    public short CutsceneEntityIDPart1 { get; set; } = 0;
+                    public short CutsceneEntityIDPart2 { get; set; } = 0;
+                    public sbyte Area { get; set; } = -1;
+                    public sbyte Block { get; set; } = -1;
                     public override void ReadInner(BinaryReaderEx br)
                     {
                         CutsceneEntityType = br.ReadEnum16<EntityTypes>();
@@ -112,14 +119,11 @@ namespace SoulsAssetPipeline.Animation
 
                 public class GroupData192 : EventGroupData
                 {
-                    public override int ForGroupType => 192;
+                    internal override int GetGroupTypeThisIsFor() => 192;
                 }
             }
 
-            /// <summary>
-            /// Indices of events in this group in the parent animation's collection.
-            /// </summary>
-            public List<int> Indices;
+            internal List<int> indices;
 
             /// <summary>
             /// Creates a new empty EventGroup with the given type.
@@ -127,7 +131,7 @@ namespace SoulsAssetPipeline.Animation
             public EventGroup(long eventType)
             {
                 GroupType = eventType;
-                Indices = new List<int>();
+                indices = new List<int>();
             }
 
             internal EventGroup(BinaryReaderEx br, List<long> eventHeaderOffsets, TAEFormat format)
@@ -175,10 +179,10 @@ namespace SoulsAssetPipeline.Animation
                 br.StepIn(valuesOffset);
                 {
                     if (format == TAEFormat.SOTFS)
-                        Indices = br.ReadVarints((int)entryCount).Select(offset
+                        indices = br.ReadVarints((int)entryCount).Select(offset
                             => eventHeaderOffsets.FindIndex(headerOffset => headerOffset == offset)).ToList();
                     else
-                        Indices = br.ReadInt32s((int)entryCount).Select(offset
+                        indices = br.ReadInt32s((int)entryCount).Select(offset
                             => eventHeaderOffsets.FindIndex(headerOffset => headerOffset == offset)).ToList();
                 }
                 br.StepOut();
@@ -186,7 +190,7 @@ namespace SoulsAssetPipeline.Animation
 
             internal void WriteHeader(BinaryWriterEx bw, int i, int j, TAEFormat format)
             {
-                bw.WriteVarint(Indices.Count);
+                bw.WriteVarint(indices.Count);
                 bw.ReserveVarint($"EventGroupValuesOffset{i}:{j}");
                 bw.ReserveVarint($"EventGroupTypeOffset{i}:{j}");
                 if (format != TAEFormat.DS1)
@@ -212,7 +216,7 @@ namespace SoulsAssetPipeline.Animation
                 {
                     if (GroupData != null)
                     {
-                        if (GroupData?.ForGroupType != GroupType)
+                        if (GroupData?.GetGroupTypeThisIsFor() != GroupType)
                         {
                             throw new InvalidDataException("TAE event group data is not for the correct type.");
                         }
@@ -222,12 +226,12 @@ namespace SoulsAssetPipeline.Animation
                 }
 
                 bw.FillVarint($"EventGroupValuesOffset{i}:{j}", bw.Position);
-                for (int k = 0; k < Indices.Count; k++)
+                for (int k = 0; k < indices.Count; k++)
                 {
                     if (format == TAEFormat.SOTFS)
-                        bw.WriteVarint(eventHeaderOffsets[Indices[k]]);
+                        bw.WriteVarint(eventHeaderOffsets[indices[k]]);
                     else
-                        bw.WriteInt32((int)eventHeaderOffsets[Indices[k]]);
+                        bw.WriteInt32((int)eventHeaderOffsets[indices[k]]);
                 }
 
                 if (format != TAEFormat.DS1)
