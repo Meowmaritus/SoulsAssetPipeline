@@ -34,8 +34,8 @@ namespace SoulsAssetPipeline.Animation
                 /// Type of AnimMiniHeader that this is.
                 /// </summary>
                 public abstract MiniHeaderType Type { get; }
-                internal abstract void ReadInner(BinaryReaderEx br);
-                internal abstract void WriteInner(BinaryWriterEx bw);
+                internal abstract void ReadInner(BinaryReaderEx br, TAEFormat format);
+                internal abstract void WriteInner(BinaryWriterEx bw, TAEFormat format);
 
                 /// <summary>
                 /// Gets a clone of this not tied by reference.
@@ -90,21 +90,25 @@ namespace SoulsAssetPipeline.Animation
                     /// </summary>
                     public int ImportHKXSourceAnimID { get; set; } = 0;
 
-                    internal override void ReadInner(BinaryReaderEx br)
+                    internal override void ReadInner(BinaryReaderEx br, TAEFormat format)
                     {
                         IsLoopByDefault = br.ReadByte() != 0;
                         ImportsHKX = br.ReadByte() != 0;
                         AllowDelayLoad = br.ReadByte() != 0;
+
+                        if (format == TAEFormat.DES)
+                            AllowDelayLoad = false;
+
                         br.ReadByte();
 
                         ImportHKXSourceAnimID = br.ReadInt32();
                     }
 
-                    internal override void WriteInner(BinaryWriterEx bw)
+                    internal override void WriteInner(BinaryWriterEx bw, TAEFormat format)
                     {
                         bw.WriteBoolean(IsLoopByDefault);
                         bw.WriteBoolean(ImportsHKX);
-                        bw.WriteBoolean(AllowDelayLoad);
+                        bw.WriteBoolean(format != TAEFormat.DES && AllowDelayLoad);
                         bw.WriteByte(0);
 
                         bw.WriteInt32(ImportHKXSourceAnimID);
@@ -144,16 +148,22 @@ namespace SoulsAssetPipeline.Animation
                     /// </summary>
                     public int Unknown { get; set; } = -1;
 
-                    internal override void ReadInner(BinaryReaderEx br)
+                    internal override void ReadInner(BinaryReaderEx br, TAEFormat format)
                     {
                         ImportFromAnimID = br.ReadInt32();
                         Unknown = br.ReadInt32();
+
+                        if (format == TAEFormat.DES)
+                            br.Pad(0x10);
                     }
 
-                    internal override void WriteInner(BinaryWriterEx bw)
+                    internal override void WriteInner(BinaryWriterEx bw, TAEFormat format)
                     {
                         bw.WriteInt32(ImportFromAnimID);
                         bw.WriteInt32(Unknown);
+
+                        if (format == TAEFormat.DES)
+                            bw.Pad(0x10);
                     }
                 }
             }
@@ -203,6 +213,12 @@ namespace SoulsAssetPipeline.Animation
                 lastEventParamOffset = 0;
                 ID = br.ReadVarint();
                 long offset = br.ReadVarint();
+
+                if (format == TAEFormat.DES)
+                {
+                    br.Pad(0x10);
+                }
+
                 br.StepIn(offset);
                 {
                     int eventCount;
@@ -211,7 +227,7 @@ namespace SoulsAssetPipeline.Animation
                     long eventGroupsOffset;
                     long timesOffset;
 
-                    if (format == TAEFormat.DS1)
+                    if (format == TAEFormat.DS1 || format == TAEFormat.DES)
                     {
                         eventCount = br.ReadInt32();
                         eventHeadersOffset = br.ReadVarint();
@@ -222,6 +238,11 @@ namespace SoulsAssetPipeline.Animation
                         animFileOffset = br.ReadVarint();
 
                         //For DeS assert 5 int32 == 0 here
+                        if (format == TAEFormat.DES)
+                        {
+                            for (int i = 0; i < 5; i++)
+                                br.AssertInt32(0);
+                        }
                     }
                     else
                     {
@@ -308,7 +329,10 @@ namespace SoulsAssetPipeline.Animation
                         if (br.VarintLong)
                             br.AssertInt32(0);
 
-                        br.AssertVarint(br.Position + (br.VarintLong ? 8 : 4));
+                        var fileNameOffsetOffset = br.GetNextPaddedOffsetAfterCurrentField(br.VarintSize, format == TAEFormat.DES ? 0x10 : 0);
+                        br.AssertVarint(fileNameOffsetOffset);
+
+                        br.Position = fileNameOffsetOffset;
                         long animFileNameOffset = br.ReadVarint();
 
                         //if (AnimFileReference)
@@ -343,9 +367,9 @@ namespace SoulsAssetPipeline.Animation
                             throw new NotImplementedException($"{nameof(AnimMiniHeader)} type not implemented yet.");
                         }
 
-                        MiniHeader.ReadInner(br);
+                        MiniHeader.ReadInner(br, format);
 
-                        if (format != TAEFormat.DS1)
+                        if (!(format == TAEFormat.DES || format == TAEFormat.DS1))
                         {
                             br.AssertVarint(0);
                             br.AssertVarint(0);
@@ -389,10 +413,12 @@ namespace SoulsAssetPipeline.Animation
                 br.StepOut();
             }
 
-            internal void WriteHeader(BinaryWriterEx bw, int i)
+            internal void WriteHeader(BinaryWriterEx bw, int i, TAEFormat format)
             {
                 bw.WriteVarint(ID);
                 bw.ReserveVarint($"AnimationOffset{i}");
+                if (format == TAEFormat.DES)
+                    bw.Pad(0x10);
             }
 
             internal void WriteBody(BinaryWriterEx bw, int i, TAEFormat format)
@@ -406,7 +432,7 @@ namespace SoulsAssetPipeline.Animation
                         EventGroups.Add(ev.Group);
                 }
 
-                if (format == TAEFormat.DS1)
+                if (format == TAEFormat.DS1 || format == TAEFormat.DES)
                 {
                     bw.WriteInt32(Events.Count);
                     bw.ReserveVarint($"EventHeadersOffset{i}");
@@ -416,6 +442,9 @@ namespace SoulsAssetPipeline.Animation
                     bw.ReserveVarint($"TimesOffset{i}");
                     bw.ReserveVarint($"AnimFileOffset{i}");
                     //For DeS write 5 int32 == 0
+                    if (format == TAEFormat.DES)
+                        for (int j = 0; j < 5; j++)
+                            bw.WriteInt32(0);
                 }
                 else
                 {
@@ -434,7 +463,13 @@ namespace SoulsAssetPipeline.Animation
             {
                 bw.FillVarint($"AnimFileOffset{i}", bw.Position);
                 bw.WriteVarint((int)MiniHeader.Type);
-                bw.WriteVarint(bw.Position + (bw.VarintLong ? 8 : 4));
+
+
+                bw.ReserveVarint("AnimFileNameOffsetOffset");
+                if (format == TAEFormat.DES)
+                    bw.Pad(0x10);
+                bw.FillVarint("AnimFileNameOffsetOffset", bw.Position);
+
                 bw.ReserveVarint("AnimFileNameOffset");
 
                 //if (AnimFileReference)
@@ -456,9 +491,9 @@ namespace SoulsAssetPipeline.Animation
                 //    bw.WriteInt32(ReferenceID);
                 //}
 
-                MiniHeader.WriteInner(bw);
+                MiniHeader.WriteInner(bw, format);
 
-                if (format != TAEFormat.DS1)
+                if (!(format == TAEFormat.DES || format == TAEFormat.DS1))
                 {
                     bw.WriteVarint(0);
                     bw.WriteVarint(0);
@@ -472,7 +507,7 @@ namespace SoulsAssetPipeline.Animation
                 }
 
                 bw.FillVarint("AnimFileNameOffset", bw.Position);
-                if (AnimFileName != "")
+                if (!string.IsNullOrWhiteSpace(AnimFileName))
                 {
                     bw.WriteUTF16(AnimFileName, true);
 
@@ -511,7 +546,7 @@ namespace SoulsAssetPipeline.Animation
                 return timeOffsets;
             }
 
-            internal List<long> WriteEventHeaders(BinaryWriterEx bw, int animIndex, Dictionary<float, long> timeOffsets)
+            internal List<long> WriteEventHeaders(BinaryWriterEx bw, int animIndex, Dictionary<float, long> timeOffsets, TAEFormat format)
             {
                 var eventHeaderOffsets = new List<long>(Events.Count);
                 if (Events.Count > 0)
@@ -520,7 +555,7 @@ namespace SoulsAssetPipeline.Animation
                     for (int i = 0; i < Events.Count; i++)
                     {
                         eventHeaderOffsets.Add(bw.Position);
-                        Events[i].WriteHeader(bw, animIndex, i, timeOffsets);
+                        Events[i].WriteHeader(bw, animIndex, i, timeOffsets, format);
                     }
                 }
                 else

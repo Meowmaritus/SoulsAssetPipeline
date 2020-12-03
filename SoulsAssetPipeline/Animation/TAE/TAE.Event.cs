@@ -354,11 +354,13 @@ namespace SoulsAssetPipeline.Animation
                 EndTime = endTime;
             }
 
-            internal void WriteHeader(BinaryWriterEx bw, int animIndex, int eventIndex, Dictionary<float, long> timeOffsets)
+            internal void WriteHeader(BinaryWriterEx bw, int animIndex, int eventIndex, Dictionary<float, long> timeOffsets, TAEFormat format)
             {
                 bw.WriteVarint(timeOffsets[StartTime]);
                 bw.WriteVarint(timeOffsets[EndTime]);
                 bw.ReserveVarint($"EventDataOffset{animIndex}:{eventIndex}");
+                if (format == TAEFormat.DES)
+                    bw.Pad(0x10);
             }
 
             internal void WriteData(BinaryWriterEx bw, int animIndex, int eventIndex, TAEFormat format)
@@ -371,14 +373,21 @@ namespace SoulsAssetPipeline.Animation
                 if (format != TAEFormat.DS1)
                     bw.WriteInt32(Unk04);
 
+
+
                 if (format == TAEFormat.SDT && Type == 943)
                     bw.WriteVarint(0);
                 else
-                    bw.WriteVarint(bw.Position + (bw.VarintLong ? 8 : 4));
+                    bw.ReserveVarint($"EventDataParametersOffset{animIndex}:{eventIndex}");
+
+                if (format == TAEFormat.DES)
+                    bw.Pad(0x10);
+
+                bw.FillVarint($"EventDataParametersOffset{animIndex}:{eventIndex}", bw.Position);
 
                 bw.WriteBytes(ParameterBytes);
 
-                if (format != TAEFormat.DS1)
+                if (bw.VarintLong || format == TAEFormat.DES)
                     bw.Pad(0x10);
             }
 
@@ -400,6 +409,10 @@ namespace SoulsAssetPipeline.Animation
                 long startTimeOffset = br.ReadVarint();
                 long endTimeOffset = br.ReadVarint();
                 long eventDataOffset = br.ReadVarint();
+
+                if (format == TAEFormat.DES)
+                    br.Pad(0x10);
+
                 float startTime = br.GetSingle(startTimeOffset);
                 float endTime = br.GetSingle(endTimeOffset);
 
@@ -408,7 +421,7 @@ namespace SoulsAssetPipeline.Animation
                 {
                     result.Type = br.ReadInt32();
 
-                    if (format != TAEFormat.DS1)
+                    if (br.VarintLong)
                         result.Unk04 = br.ReadInt32();
 
                     //if (format == TAEFormat.SDT)
@@ -421,8 +434,11 @@ namespace SoulsAssetPipeline.Animation
                     //{
                     //    parametersOffset = br.AssertVarint(br.Position + (br.VarintLong ? 8 : 4));
                     //}
-                    br.AssertVarint(br.Position + (br.VarintLong ? 8 : 4), 0);
-                    parametersOffset = br.Position;
+
+                    // Parameters will ALWAYS be right here otherwise it crashes iirc.
+                    parametersOffset = br.GetNextPaddedOffsetAfterCurrentField(br.VarintSize, format == TAEFormat.DES ? 0x10 : 0);
+                    br.AssertVarint(parametersOffset, 0);
+                    br.Position = parametersOffset;
                 }
                 br.StepOut();
 

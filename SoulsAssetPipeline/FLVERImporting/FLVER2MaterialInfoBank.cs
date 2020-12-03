@@ -16,7 +16,7 @@ namespace SoulsAssetPipeline.FLVERImporting
 
         public string FallbackToDefaultMtdIfNecessary(string mtd, SapLogger logger)
         {
-            if (mtd != null && MaterialDefs.ContainsKey(mtd))
+            if (mtd != null && MaterialDefs.ContainsKey(mtd.ToLower()))
             {
                 return mtd;
             }

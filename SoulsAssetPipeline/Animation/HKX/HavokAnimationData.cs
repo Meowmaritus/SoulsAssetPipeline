@@ -44,7 +44,36 @@ namespace SoulsAssetPipeline.Animation
             BlendHint = binding?.BlendHint ?? HKX.AnimationBlendHint.NORMAL;
         }
 
-        public abstract NewBlendableTransform GetBlendableTransformOnFrame(int hkxBoneIndex, float frame);
+        public NewBlendableTransform GetTransformOnFrameByBone(int hkxBoneIndex, float frame)
+        {
+            var track = HkxBoneIndexToTransformTrackMap[hkxBoneIndex];
+
+            if (track == -1)
+            {
+                var skeleTransform = hkaSkeleton.Transforms[hkxBoneIndex];
+
+                NewBlendableTransform defaultBoneTransformation = new NewBlendableTransform();
+
+                defaultBoneTransformation.Scale.X = skeleTransform.Scale.Vector.X;
+                defaultBoneTransformation.Scale.Y = skeleTransform.Scale.Vector.Y;
+                defaultBoneTransformation.Scale.Z = skeleTransform.Scale.Vector.Z;
+
+                defaultBoneTransformation.Rotation = new Quaternion(
+                    skeleTransform.Rotation.Vector.X,
+                    skeleTransform.Rotation.Vector.Y,
+                    skeleTransform.Rotation.Vector.Z,
+                    skeleTransform.Rotation.Vector.W);
+
+                defaultBoneTransformation.Translation.X = skeleTransform.Position.Vector.X;
+                defaultBoneTransformation.Translation.Y = skeleTransform.Position.Vector.Y;
+                defaultBoneTransformation.Translation.Z = skeleTransform.Position.Vector.Z;
+
+                return defaultBoneTransformation;
+            }
+
+            return GetTransformOnFrame(track, frame);
+        }
+        public abstract NewBlendableTransform GetTransformOnFrame(int transformIndex, float frame);
 
     }
 
@@ -99,8 +128,8 @@ namespace SoulsAssetPipeline.Animation
 
         private NewBlendableTransform GetTransformOnSpecificBlockAndFrame(int transformIndex, int block, float frame)
         {
-            if (frame < 0)
-                throw new InvalidOperationException("Spline Compressed Animations cannot sample before frame 0.");
+            while (frame < 0)
+                frame += FrameCount;
 
             frame = (frame % (FrameCount - 1)) % (NumFramesPerBlock - 1);
 
@@ -167,12 +196,12 @@ namespace SoulsAssetPipeline.Animation
             }
             else
             {
-                //result.Rotation = Quaternion.Identity;
-                result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
-                    skeleTransform.Rotation.Vector.X,
-                    skeleTransform.Rotation.Vector.Y,
-                    skeleTransform.Rotation.Vector.Z,
-                    skeleTransform.Rotation.Vector.W);
+                result.Rotation = Quaternion.Identity;
+                //result.Rotation = IsAdditiveBlend ? Quaternion.Identity : new Quaternion(
+                //    skeleTransform.Rotation.Vector.X,
+                //    skeleTransform.Rotation.Vector.Y,
+                //    skeleTransform.Rotation.Vector.Z,
+                //    skeleTransform.Rotation.Vector.W);
             }
 
             //if (IsAdditiveBlend)
@@ -266,38 +295,13 @@ namespace SoulsAssetPipeline.Animation
             return result;
         }
 
-        public override NewBlendableTransform GetBlendableTransformOnFrame(int hkxBoneIndex, float frame)
+        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame)
         {
-            var track = HkxBoneIndexToTransformTrackMap[hkxBoneIndex];
-
-            if (track == -1)
-            {
-                var skeleTransform = hkaSkeleton.Transforms[hkxBoneIndex];
-
-                NewBlendableTransform defaultBoneTransformation = new NewBlendableTransform();
-
-                defaultBoneTransformation.Scale.X = skeleTransform.Scale.Vector.X;
-                defaultBoneTransformation.Scale.Y = skeleTransform.Scale.Vector.Y;
-                defaultBoneTransformation.Scale.Z = skeleTransform.Scale.Vector.Z;
-
-                defaultBoneTransformation.Rotation = new Quaternion(
-                    skeleTransform.Rotation.Vector.X,
-                    skeleTransform.Rotation.Vector.Y,
-                    skeleTransform.Rotation.Vector.Z,
-                    skeleTransform.Rotation.Vector.W);
-
-                defaultBoneTransformation.Translation.X = skeleTransform.Position.Vector.X;
-                defaultBoneTransformation.Translation.Y = skeleTransform.Position.Vector.Y;
-                defaultBoneTransformation.Translation.Z = skeleTransform.Position.Vector.Z;
-
-                return defaultBoneTransformation;
-            }
-
             int blockIndex = GetBlock(frame);
 
             float frameInBlock = (frame % (FrameCount - 1)) % (NumFramesPerBlock - 1);
 
-            NewBlendableTransform currentFrame = GetTransformOnSpecificBlockAndFrame(track,
+            NewBlendableTransform currentFrame = GetTransformOnSpecificBlockAndFrame(transformTrackIndex,
                     block: blockIndex, frame);
             return currentFrame;
 
@@ -350,7 +354,7 @@ namespace SoulsAssetPipeline.Animation
             for (int i = 0; i < binding.TransformTrackToBoneIndices.Size; i++)
             {
                 short boneIndex = binding.TransformTrackToBoneIndices[i].data;
-                if (boneIndex >= 0)
+                if (boneIndex >= 0 && boneIndex < skeleton.Bones.Size)
                     HkxBoneIndexToTransformTrackMap[boneIndex] = i;
                 TransformTrackIndexToHkxBoneMap[i] = boneIndex;
             }
@@ -368,37 +372,12 @@ namespace SoulsAssetPipeline.Animation
             }
         }
 
-        public override NewBlendableTransform GetBlendableTransformOnFrame(int hkxBoneIndex, float frame)
+        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame)
         {
-            var track = HkxBoneIndexToTransformTrackMap[hkxBoneIndex];
-
-            if (track == -1)
-            {
-                var skeleTransform = hkaSkeleton.Transforms.GetArrayData().Elements[hkxBoneIndex];
-
-                NewBlendableTransform defaultBoneTransformation = new NewBlendableTransform();
-
-                defaultBoneTransformation.Scale.X = skeleTransform.Scale.Vector.X;
-                defaultBoneTransformation.Scale.Y = skeleTransform.Scale.Vector.Y;
-                defaultBoneTransformation.Scale.Z = skeleTransform.Scale.Vector.Z;
-
-                defaultBoneTransformation.Rotation = new Quaternion(
-                    skeleTransform.Rotation.Vector.X,
-                    skeleTransform.Rotation.Vector.Y,
-                    skeleTransform.Rotation.Vector.Z,
-                    skeleTransform.Rotation.Vector.W);
-
-                defaultBoneTransformation.Translation.X = skeleTransform.Position.Vector.X;
-                defaultBoneTransformation.Translation.Y = skeleTransform.Position.Vector.Y;
-                defaultBoneTransformation.Translation.Z = skeleTransform.Position.Vector.Z;
-
-                return defaultBoneTransformation;
-            }
-
             float loopedFrame = frame % (FrameCount - 1);
 
-            NewBlendableTransform currentFrame = GetTransformOnFrame((int)Math.Floor(loopedFrame), track);
-            NewBlendableTransform nextFrame = GetTransformOnFrame((int)Math.Ceiling(loopedFrame), track);
+            NewBlendableTransform currentFrame = GetTransformOnFrame((int)Math.Floor(loopedFrame), transformTrackIndex);
+            NewBlendableTransform nextFrame = GetTransformOnFrame((int)Math.Ceiling(loopedFrame), transformTrackIndex);
             return NewBlendableTransform.Lerp(currentFrame, nextFrame, loopedFrame % 1);
         }
 

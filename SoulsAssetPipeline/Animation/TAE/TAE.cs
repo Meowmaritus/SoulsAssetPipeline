@@ -37,7 +37,11 @@ namespace SoulsAssetPipeline.Animation
             /// <summary>
             /// Sekiro: Shadows Die Twice
             /// </summary>
-            SDT = 3
+            SDT = 3,
+            /// <summary>
+            /// Demon's Souls
+            /// </summary>
+            DES = 4,
         }
 
         /// <summary>
@@ -47,7 +51,7 @@ namespace SoulsAssetPipeline.Animation
 
         /// <summary>
         /// Whether the format is big endian.
-        /// Only valid for DS1 files.
+        /// Only valid for DES/DS1 files.
         /// </summary>
         public bool BigEndian { get; set; }
 
@@ -133,8 +137,8 @@ namespace SoulsAssetPipeline.Animation
 
             br.AssertASCII("TAE ");
 
-            bool isBigEndian = br.AssertByte(0, 1) == 1;
-            br.BigEndian = isBigEndian;
+            BigEndian = br.AssertByte(0, 1) == 1;
+            br.BigEndian = BigEndian;
 
             br.AssertByte(0);
             br.AssertByte(0);
@@ -166,7 +170,7 @@ namespace SoulsAssetPipeline.Animation
             else
             {
                 throw new System.IO.InvalidDataException("Invalid combination of TAE header values: " +
-                    $"IsBigEndian={isBigEndian}, Is64Bit={is64Bit}, Version={version}");
+                    $"IsBigEndian={BigEndian}, Is64Bit={is64Bit}, Version={version}");
             }
 
             br.ReadInt32(); // File size
@@ -181,7 +185,9 @@ namespace SoulsAssetPipeline.Animation
 
             if (Format == TAEFormat.DS1)
             {
-                br.AssertInt16(2);
+                var subFormat = br.AssertInt16(0, 2);
+                if (subFormat == 0)
+                    Format = TAEFormat.DES;
                 br.AssertInt16(1);
             }
             else
@@ -191,7 +197,7 @@ namespace SoulsAssetPipeline.Animation
 
             br.AssertVarint(0);
 
-            if (Format == TAEFormat.DS1)
+            if (Format == TAEFormat.DS1 || Format == TAEFormat.DES)
             {
                 br.AssertInt64(0);
                 br.AssertInt64(0);
@@ -217,34 +223,59 @@ namespace SoulsAssetPipeline.Animation
             long animsOffset = br.ReadVarint();
             br.ReadVarint(); // Anim groups offset
 
-            br.AssertVarint(Format == TAEFormat.DS1 ? 0x90 : 0xA0);
+            br.AssertVarint((Format == TAEFormat.DES || Format == TAEFormat.DS1) ? 0x90 : 0xA0);
             br.AssertVarint(animCount);
             br.ReadVarint(); // First anim offset
-            if (Format == TAEFormat.DS1)
+            if (Format == TAEFormat.DS1 || Format == TAEFormat.DES)
                 br.AssertInt32(0);
             br.AssertVarint(1);
-            br.AssertVarint(Format == TAEFormat.DS1 ? 0x80 : 0x90);
-            if (Format == TAEFormat.DS1)
+            br.AssertVarint((Format == TAEFormat.DES || Format == TAEFormat.DS1) ? 0x80 : 0x90);
+            if (Format == TAEFormat.DS1 || Format == TAEFormat.DES)
                 br.AssertInt64(0);
             br.AssertInt32(ID);
             br.AssertInt32(ID);
             br.AssertVarint(0x50);
             br.AssertInt64(0);
-            br.AssertVarint(Format == TAEFormat.DS1 ? 0x98 : 0xB0);
-            
-            long skeletonNameOffset = br.ReadVarint();
-            long sibNameOffset = br.ReadVarint();
 
-            if (Format != TAEFormat.SOTFS)
+            if (Format == TAEFormat.DES)
+                br.AssertVarint(0xA0);
+            else if (Format == TAEFormat.DS1)
+                br.AssertVarint(0x98);
+            else
+                br.AssertVarint(0xB0);
+
+            long skeletonNameOffset = 0;
+            long sibNameOffset = 0;
+
+            if (BigEndian)
             {
-                br.AssertVarint(0);
-                br.AssertVarint(0);
+                if (Format != TAEFormat.SOTFS)
+                {
+                    br.AssertVarint(0);
+                    br.AssertVarint(0);
+                }
+
+                skeletonNameOffset = br.ReadVarint();
+                sibNameOffset = br.ReadVarint();
+            }
+            else
+            {
+                skeletonNameOffset = br.ReadVarint();
+                sibNameOffset = br.ReadVarint();
+
+                if (Format != TAEFormat.SOTFS)
+                {
+                    br.AssertVarint(0);
+                    br.AssertVarint(0);
+                }
             }
 
+            
+
             if (Format != TAEFormat.SOTFS)
             {
-                SkeletonName = br.GetUTF16(skeletonNameOffset);
-                SibName = br.GetUTF16(sibNameOffset);
+                SkeletonName = skeletonNameOffset == 0 ? null : br.GetUTF16(skeletonNameOffset);
+                SibName = sibNameOffset == 0 ? null : br.GetUTF16(sibNameOffset);
             }
 
             br.StepIn(animsOffset);
@@ -284,7 +315,6 @@ namespace SoulsAssetPipeline.Animation
 
         protected override void Write(BinaryWriterEx bw)
         {
-
             bw.WriteASCII("TAE ");
 
             bw.BigEndian = BigEndian;
@@ -293,7 +323,7 @@ namespace SoulsAssetPipeline.Animation
             bw.WriteByte(0);
             bw.WriteByte(0);
 
-            if (Format == TAEFormat.DS1)
+            if (Format == TAEFormat.DES || Format == TAEFormat.DS1)
             {
                 bw.VarintLong = false;
                 bw.WriteByte(0);
@@ -304,7 +334,7 @@ namespace SoulsAssetPipeline.Animation
                 bw.WriteByte(0xFF);
             }
 
-            if (Format == TAEFormat.DS1)
+            if (Format == TAEFormat.DES || Format == TAEFormat.DS1)
                 bw.WriteInt32(0x1000B);
             else if (Format == TAEFormat.DS3 || Format == TAEFormat.SOTFS)
                 bw.WriteInt32(0x1000C);
@@ -315,11 +345,11 @@ namespace SoulsAssetPipeline.Animation
             bw.WriteVarint(0x40);
             bw.WriteVarint(1);
             bw.WriteVarint(0x50);
-            bw.WriteVarint(Format == TAEFormat.DS1 ? 0x70 : 0x80);
+            bw.WriteVarint(bw.VarintLong ? 0x80 : 0x70);
 
-            if (Format == TAEFormat.DS1)
+            if ((Format == TAEFormat.DES || Format == TAEFormat.DS1))
             {
-                bw.WriteInt16(2);
+                bw.WriteInt16((short)(Format == TAEFormat.DES ? 0 : 2));
                 bw.WriteInt16(1);
             }
             else
@@ -330,7 +360,7 @@ namespace SoulsAssetPipeline.Animation
             bw.WriteVarint(0);
 
             //DeS also
-            if (Format == TAEFormat.DS1)
+            if (Format == TAEFormat.DES || Format == TAEFormat.DS1)
             {
                 bw.WriteInt64(0);
                 bw.WriteInt64(0);
@@ -357,43 +387,81 @@ namespace SoulsAssetPipeline.Animation
             bw.WriteInt32(Animations.Count);
             bw.ReserveVarint("AnimsOffset");
             bw.ReserveVarint("AnimGroupsOffset");
-            bw.WriteVarint(Format == TAEFormat.DS1 ? 0x90 : 0xA0);
+            bw.WriteVarint((Format == TAEFormat.DES || Format == TAEFormat.DS1) ? 0x90 : 0xA0);
             bw.WriteVarint(Animations.Count);
             bw.ReserveVarint("FirstAnimOffset");
-            if (Format == TAEFormat.DS1)
+            if (Format == TAEFormat.DES || Format == TAEFormat.DS1)
                 bw.WriteInt32(0);
             bw.WriteVarint(1);
-            bw.WriteVarint(Format == TAEFormat.DS1 ? 0x80 : 0x90);
-            if (Format == TAEFormat.DS1)
+            bw.WriteVarint((Format == TAEFormat.DES || Format == TAEFormat.DS1) ? 0x80 : 0x90);
+            if (Format == TAEFormat.DES || Format == TAEFormat.DS1)
                 bw.WriteInt64(0);
             bw.WriteInt32(ID);
             bw.WriteInt32(ID);
             bw.WriteVarint(0x50);
             bw.WriteInt64(0);
-            bw.WriteVarint(Format == TAEFormat.DS1 ? 0x98 : 0xB0);
-            bw.ReserveVarint("SkeletonName");
-            bw.ReserveVarint("SibName");
 
-            if (Format != TAEFormat.SOTFS)
+            if (Format == TAEFormat.DES)
+                bw.WriteVarint(0xA0);
+            else if (Format == TAEFormat.DS1)
+                bw.WriteVarint(0x98);
+            else
+                bw.WriteVarint(0xB0);
+
+
+            if (BigEndian)
             {
-                bw.WriteVarint(0);
-                bw.WriteVarint(0);
+                if (Format != TAEFormat.SOTFS)
+                {
+                    bw.WriteVarint(0);
+                    bw.WriteVarint(0);
+                }
+
+                bw.ReserveVarint("SkeletonName");
+                bw.ReserveVarint("SibName");
+            }
+            else
+            {
+                bw.ReserveVarint("SkeletonName");
+                bw.ReserveVarint("SibName");
+
+                if (Format != TAEFormat.SOTFS)
+                {
+                    bw.WriteVarint(0);
+                    bw.WriteVarint(0);
+                }
             }
 
-            bw.FillVarint("SkeletonName", bw.Position);
-            if (!string.IsNullOrEmpty(SkeletonName))
+            
+
+            if (SkeletonName != null)
             {
-                bw.WriteUTF16(SkeletonName, true);
-                if (Format != TAEFormat.DS1)
-                    bw.Pad(0x10);
+                bw.FillVarint("SkeletonName", bw.Position);
+                if (!string.IsNullOrEmpty(SkeletonName))
+                {
+                    bw.WriteUTF16(SkeletonName, true);
+                    if (bw.VarintLong || Format == TAEFormat.DES)
+                        bw.Pad(0x10);
+                }
+            }
+            else
+            {
+                bw.FillVarint("SkeletonName", 0);
             }
 
-            bw.FillVarint("SibName", bw.Position);
-            if (!string.IsNullOrEmpty(SibName))
+            if (SibName != null)
             {
-                bw.WriteUTF16(SibName, true);
-                if (Format != TAEFormat.DS1)
-                    bw.Pad(0x10);
+                bw.FillVarint("SibName", bw.Position);
+                if (!string.IsNullOrEmpty(SibName))
+                {
+                    bw.WriteUTF16(SibName, true);
+                    if (bw.VarintLong || Format == TAEFormat.DES)
+                        bw.Pad(0x10);
+                }
+            }
+            else
+            {
+                bw.FillVarint("SibName", 0);
             }
 
             Animations.Sort((a1, a2) => a1.ID.CompareTo(a2.ID));
@@ -409,7 +477,7 @@ namespace SoulsAssetPipeline.Animation
                 for (int i = 0; i < Animations.Count; i++)
                 {
                     animOffsets.Add(bw.Position);
-                    Animations[i].WriteHeader(bw, i);
+                    Animations[i].WriteHeader(bw, i, Format);
                 }
             }
 
@@ -451,7 +519,7 @@ namespace SoulsAssetPipeline.Animation
                 Animation anim = Animations[i];
                 anim.WriteAnimFile(bw, i, Format);
                 Dictionary<float, long> timeOffsets = anim.WriteTimes(bw, i, Format);
-                List<long> eventHeaderOffsets = anim.WriteEventHeaders(bw, i, timeOffsets);
+                List<long> eventHeaderOffsets = anim.WriteEventHeaders(bw, i, timeOffsets, Format);
                 anim.WriteEventData(bw, i, Format);
                 anim.WriteEventGroupHeaders(bw, i, Format);
                 anim.WriteEventGroupData(bw, i, eventHeaderOffsets, Format);

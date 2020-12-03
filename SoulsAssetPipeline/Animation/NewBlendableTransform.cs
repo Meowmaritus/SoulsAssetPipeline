@@ -130,6 +130,15 @@ namespace SoulsAssetPipeline.Animation
                 Matrix4x4.CreateTranslation(Translation);
         }
 
+        public Matrix4x4 GetDsasCamViewMatrix()
+        {
+            return
+                Matrix4x4.CreateTranslation(-Translation) *
+                Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(Rotation))
+                //Matrix4x4.CreateFromQuaternion(Rotation) *
+                ;
+        }
+
         public NewBlendableTransform Decomposed()
         {
             if (Matrix4x4.Decompose(ComposedMatrix, out Vector3 scale, out Quaternion rotation, out Vector3 translation))

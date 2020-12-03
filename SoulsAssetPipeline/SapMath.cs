@@ -25,6 +25,54 @@ namespace SoulsAssetPipeline
 
         public static NMatrix ZUpToYUpNMatrix => NMatrix.CreateRotationZ(Pi) * NMatrix.CreateRotationX(-PiOver2);
 
+        public static NQuaternion CustomQuatSlerp(NQuaternion v0, NQuaternion v1, float t)
+        {
+            v0 = NQuaternion.Normalize(v0);
+            v1 = NQuaternion.Normalize(v1);
+
+            float dot = NQuaternion.Dot(v0, v1);
+
+            if (dot < 0)
+            {
+                v1 = -v1;
+                dot = -dot;
+            }
+
+            const double DOT_THRESH = 0.9995;
+            if (dot > DOT_THRESH)
+            {
+                var diff = (v1 - v0);
+                diff.X *= t;
+                diff.Y *= t;
+                diff.Z *= t;
+                diff.W *= t;
+                return NQuaternion.Normalize(v0 + diff);
+            }
+
+            // Since dot is in range [0, DOT_THRESHOLD], acos is safe
+            float theta_0 = (float)Math.Acos(dot);        // theta_0 = angle between input vectors
+            float theta = theta_0 * t;          // theta = angle between v0 and result
+            float sin_theta = (float)Math.Sin(theta);     // compute this value only once
+            float sin_theta_0 = (float)Math.Sin(theta_0); // compute this value only once
+
+            float s0 = (float)Math.Cos(theta) - dot * sin_theta / sin_theta_0;  // == sin(theta_0 - theta) / sin(theta_0)
+            float s1 = sin_theta / sin_theta_0;
+
+            var a = v0;
+            a.X *= s0;
+            a.Y *= s0;
+            a.Z *= s0;
+            a.W *= s0;
+
+            var b = v1;
+            b.X *= s1;
+            b.Y *= s1;
+            b.Z *= s1;
+            b.W *= s1;
+
+            return a + b;
+        }
+
         public static NQuaternion MirrorQuat(NQuaternion quatB)
         {
             var angle = 2 * Math.Acos(quatB.W);

@@ -33,6 +33,8 @@ namespace SoulsAssetPipeline.AnimationImporting
 
         internal List<string> TransformTrackNames = new List<string>();
 
+        internal Dictionary<string, int> TransformTrackToBoneIndices = new Dictionary<string, int>();
+
         internal List<Frame> Frames = new List<Frame>();
 
         //public double Duration;
@@ -40,37 +42,45 @@ namespace SoulsAssetPipeline.AnimationImporting
         //public double Framerate = 60;
         //public double DeltaTime => 1.0 / Framerate;
 
-        public void WriteToHavok2010InterleavedUncompressedXML(string fileName)
+        public byte[] WriteToSplineCompressedHKX2010Bytes(SplineCompressedAnimation.RotationQuantizationType rotationQuantizationType, float rotationTolerance)
         {
-            var endFrame = new Frame();
-            foreach (var t in Frames[0].BoneTransforms)
+            var newGuid = Guid.NewGuid().ToString();
+
+            string uncompressed = $@"SapResources\CompressAnim\{newGuid}.uncompressed.xml";
+            string compressed = $@"SapResources\CompressAnim\{newGuid}.compressed.hkx";
+
+            WriteToHavok2010InterleavedUncompressedXMLFile(uncompressed);
+
+            string args = $"\"{Path.GetFileName(uncompressed)}\" \"{Path.GetFileName(compressed)}\" {((int)rotationQuantizationType)} {rotationTolerance}";
+
+            var xx = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($@"SapResources\CompressAnim\CompressAnim.exe")
             {
-                endFrame.BoneTransforms.Add(t);
-            }
-            endFrame.RootMotionTranslation = Frames[Frames.Count - 1].RootMotionTranslation +
-                (Frames[Frames.Count - 1].RootMotionTranslation - Frames[Frames.Count - 2].RootMotionTranslation);
+                Arguments = args,
+                CreateNoWindow = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                UseShellExecute = false,
+                WorkingDirectory = $@"SapResources\CompressAnim",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            xx.WaitForExit();
 
-            endFrame.RootMotionRotation = Frames[Frames.Count - 1].RootMotionRotation +
-                (Frames[Frames.Count - 1].RootMotionRotation - Frames[Frames.Count - 2].RootMotionRotation);
+            string standardOutput = xx.StandardOutput.ReadToEnd();
+            string standardError = xx.StandardError.ReadToEnd();
 
+            byte[] compressedHkx = File.ReadAllBytes(compressed);
 
-            Frames.Add(endFrame);
+            if (File.Exists(uncompressed))
+                File.Delete(uncompressed);
 
-            var rootMotionStart = Frames[0].RootMotion;
+            if (File.Exists(compressed))
+                File.Delete(compressed);
 
-            for (int i = 0; i < Frames.Count; i++)
-            {
-                Frames[i].RootMotionTranslation.X -= rootMotionStart.X;
-                Frames[i].RootMotionTranslation.Y -= rootMotionStart.Y;
-                Frames[i].RootMotionTranslation.Z -= rootMotionStart.Z;
-                Frames[i].RootMotionRotation -= rootMotionStart.W;
-                var xyz = System.Numerics.Vector3.Transform(Frames[i].RootMotion.XYZ(), System.Numerics.Matrix4x4.CreateRotationY(-rootMotionStart.W));
-                Frames[i].RootMotionTranslation.X = xyz.X;
-                Frames[i].RootMotionTranslation.Y = xyz.Y;
-                Frames[i].RootMotionTranslation.Z = xyz.Z;
-                Frames[i].RootMotionRotation = Frames[i].RootMotion.W;
-            }
+            return compressedHkx;
+        }
 
+        public void WriteToHavok2010InterleavedUncompressedXMLFile(string fileName)
+        {
             if (File.Exists(fileName))
                 File.Delete(fileName);
 
@@ -124,9 +134,9 @@ namespace SoulsAssetPipeline.AnimationImporting
                                     writer.WriteStartElement("hkparam");
                                     {
                                         writer.WriteAttributeString("name", "referenceFrameSamples");
-                                        writer.WriteAttributeString("numelements", (Frames.Count - 1).ToString());
+                                        writer.WriteAttributeString("numelements", (Frames.Count).ToString());
                                         var sb = new StringBuilder();
-                                        for (int i = 0; i < Frames.Count - 1; i++)
+                                        for (int i = 0; i < Frames.Count; i++)
                                         {
                                             sb.Append("\n\t\t\t\t");
                                             sb.Append($"({Frames[i].RootMotion.X:0.000000} {Frames[i].RootMotion.Y:0.000000} {Frames[i].RootMotion.Z:0.000000} {Frames[i].RootMotion.W:0.000000})");
@@ -228,14 +238,15 @@ namespace SoulsAssetPipeline.AnimationImporting
                                         {
                                             for (int t = 0; t < TransformTrackNames.Count; t++)
                                             {
+                                                var r = System.Numerics.Quaternion.Normalize(Frames[f].BoneTransforms[t].Rotation);
                                                 sb.Append("\n\t\t\t\t");
                                                 sb.Append($"({Frames[f].BoneTransforms[t].Translation.X:0.000000} " +
                                                     $"{Frames[f].BoneTransforms[t].Translation.Y:0.000000} " +
                                                     $"{Frames[f].BoneTransforms[t].Translation.Z:0.000000})");
-                                                sb.Append($"({Frames[f].BoneTransforms[t].Rotation.X:0.000000} " +
-                                                    $"{Frames[f].BoneTransforms[t].Rotation.Y:0.000000} " +
-                                                    $"{Frames[f].BoneTransforms[t].Rotation.Z:0.000000} " +
-                                                    $"{Frames[f].BoneTransforms[t].Rotation.W:0.000000})");
+                                                sb.Append($"({r.X:0.000000} " +
+                                                    $"{r.Y:0.000000} " +
+                                                    $"{r.Z:0.000000} " +
+                                                    $"{r.W:0.000000})");
                                                 sb.Append($"({Frames[f].BoneTransforms[t].Scale.X:0.000000} " +
                                                     $"{Frames[f].BoneTransforms[t].Scale.Y:0.000000} " +
                                                     $"{Frames[f].BoneTransforms[t].Scale.Z:0.000000})");
@@ -277,8 +288,8 @@ namespace SoulsAssetPipeline.AnimationImporting
                                     writer.WriteStartElement("hkparam");
                                     {
                                         writer.WriteAttributeString("name", "transformTrackToBoneIndices");
-                                        writer.WriteAttributeString("numelements", $"{TransformTrackNames.Count}");
-                                        writer.WriteString(string.Join(" ", TransformTrackNames.Select((s, i) => i.ToString())));
+                                        writer.WriteAttributeString("numelements", $"{TransformTrackToBoneIndices.Count}");
+                                        writer.WriteString(string.Join(" ", TransformTrackToBoneIndices.Select(kvp => kvp.Value)));
                                     }
                                     writer.WriteEndElement();
 
@@ -397,19 +408,19 @@ namespace SoulsAssetPipeline.AnimationImporting
             }
         }
 
-        public override NewBlendableTransform GetBlendableTransformOnFrame(int hkxBoneIndex, float frame)
+        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame)
         {
             var frameRatio = frame % 1;
             frame = frame % FrameCount;
             if (frameRatio != 0)
             {
-                var blendFrom = Frames[(int)Math.Floor(frame)].BoneTransforms[hkxBoneIndex];
-                var blendTo = Frames[(int)Math.Ceiling(frame)].BoneTransforms[hkxBoneIndex];
+                var blendFrom = Frames[(int)Math.Floor(frame)].BoneTransforms[transformTrackIndex];
+                var blendTo = Frames[(int)Math.Ceiling(frame)].BoneTransforms[transformTrackIndex];
                 return NewBlendableTransform.Lerp(blendFrom, blendTo, frameRatio);
             }
             else
             {
-                return Frames[(int)frame].BoneTransforms[hkxBoneIndex];
+                return Frames[(int)frame].BoneTransforms[transformTrackIndex];
             }
             
         }
