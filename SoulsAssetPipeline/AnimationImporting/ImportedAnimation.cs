@@ -31,11 +31,9 @@ namespace SoulsAssetPipeline.AnimationImporting
             public List<NewBlendableTransform> BoneTransforms = new List<NewBlendableTransform>();
         }
 
-        internal List<string> TransformTrackNames = new List<string>();
-
-        internal Dictionary<string, int> TransformTrackToBoneIndices = new Dictionary<string, int>();
-
-        internal List<Frame> Frames = new List<Frame>();
+        public List<string> TransformTrackNames = new List<string>();
+        public Dictionary<string, int> TransformTrackToBoneIndices = new Dictionary<string, int>();
+        public List<Frame> Frames = new List<Frame>();
 
         //public double Duration;
 

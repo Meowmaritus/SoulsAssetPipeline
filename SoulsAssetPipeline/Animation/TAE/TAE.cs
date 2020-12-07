@@ -124,6 +124,32 @@ namespace SoulsAssetPipeline.Animation
             AppliedTemplate = template;
         }
 
+        /// <summary>
+        /// For use with porting to other games etc. Make sure fields are named the same between games or this will throw a KeyNotFoundException (obviously).
+        /// </summary>
+        public void ChangeTemplateAfterLoading(Template template)
+        {
+            if (template.Game != Format)
+                throw new InvalidOperationException($"Template is for {template.Game} but this TAE is for {Format}.");
+
+            if (template.ContainsKey(EventBank))
+            {
+                foreach (var anim in Animations)
+                {
+                    for (int i = 0; i < anim.Events.Count; i++)
+                    {
+                        anim.Events[i].ChangeTemplateAfterLoading(this, template, anim.ID, i, anim.Events[i].Type);
+                    }
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException($"This TAE uses event bank {EventBank} but no such bank exists in the template.");
+            }
+
+            AppliedTemplate = template;
+        }
+
         protected override bool Is(BinaryReaderEx br)
         {
             string magic = br.GetASCII(0, 4);

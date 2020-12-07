@@ -30,6 +30,28 @@ namespace SoulsAssetPipeline.Animation
 
         public int[] TransformTrackIndexToHkxBoneMap;
 
+        /// <summary>
+        /// Gives dictionary of (index into this anims transform tracks, bone name they're mapped to).
+        /// Any tracks not mapped to bones are excluded.
+        /// </summary>
+        public Dictionary<int, string> GetTransformTrackBoneNameMapping(IEnumerable<string> boneNameWhitelist = null)
+        {
+            var res = new Dictionary<int, string>();
+            var bones = hkaSkeleton.Bones.GetArrayData().Elements;
+            for (int i = 0; i < TransformTrackIndexToHkxBoneMap.Length; i++)
+            {
+                var b = TransformTrackIndexToHkxBoneMap[i];
+                if (b >= 0 && b < bones.Count)
+                {
+                    var bn = bones[b].Name.GetString();
+
+                    if (boneNameWhitelist == null || boneNameWhitelist.Contains(bn))
+                        res.Add(i, bn);
+                }
+            }
+            return res;
+        }
+
         public HavokAnimationData(string Name, HKX.HKASkeleton skeleton, HKX.HKADefaultAnimatedReferenceFrame refFrame, HKX.HKAAnimationBinding binding)
         {
             this.Name = Name;
@@ -336,7 +358,10 @@ namespace SoulsAssetPipeline.Animation
             TransformTrackCount = anim.TransformTrackCount;
             FrameCount = (int)anim.Transforms.Capacity / anim.TransformTrackCount;
 
-            FrameDuration = Duration / FrameCount;
+            FrameDuration = Duration / (FrameCount - 1);
+
+            Duration += FrameDuration;
+            //FrameCount += 1;
 
             HkxBoneIndexToTransformTrackMap = new int[skeleton.Bones.Size];
             TransformTrackIndexToHkxBoneMap = new int[binding.TransformTrackToBoneIndices.Size];
@@ -374,7 +399,7 @@ namespace SoulsAssetPipeline.Animation
 
         public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame)
         {
-            float loopedFrame = frame % (FrameCount - 1);
+            float loopedFrame = frame % (FrameCount);
 
             NewBlendableTransform currentFrame = GetTransformOnFrame((int)Math.Floor(loopedFrame), transformTrackIndex);
             NewBlendableTransform nextFrame = GetTransformOnFrame((int)Math.Ceiling(loopedFrame), transformTrackIndex);
@@ -383,7 +408,11 @@ namespace SoulsAssetPipeline.Animation
 
         public NewBlendableTransform GetTransformOnFrame(int frame, int trackIndex)
         {
-            return Transforms[(TransformTrackCount * frame) + trackIndex];
+            while (frame < 0)
+                frame += FrameCount;
+
+            int index = (TransformTrackCount * (frame % (FrameCount))) + trackIndex;
+            return Transforms[index];
         }
     }
 }

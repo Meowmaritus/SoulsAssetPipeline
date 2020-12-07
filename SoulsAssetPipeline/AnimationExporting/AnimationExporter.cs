@@ -101,7 +101,7 @@ namespace SoulsAssetPipeline.AnimationExporting
 
                 for (int f = 0; f < anim.FrameCount; f++)
                 {
-                    var rootMotionOnFrame = anim.RootMotion.GetSampleOnExactFrame(f);
+                    var rootMotionOnFrame = anim.RootMotion.GetSampleClamped(f * anim.FrameDuration);
 
                     animTrack.PositionKeys.Add(new VectorKey(1.0 * f * anim.FrameDuration, new Vector3D(rootMotionOnFrame.X * -100, rootMotionOnFrame.Y * 100, rootMotionOnFrame.Z * 100)));
 

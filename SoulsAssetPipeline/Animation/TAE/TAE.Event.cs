@@ -285,6 +285,26 @@ namespace SoulsAssetPipeline.Animation
                 }
             }
 
+            internal void ChangeTemplateAfterLoading(TAE containingTae, Template template,
+                long animID, int eventIndex, int eventType)
+            {
+                if (template[containingTae.EventBank].ContainsKey(Type))
+                {
+                    Array.Resize(ref ParameterBytes, template[containingTae.EventBank][Type].GetAllParametersByteCount());
+
+                    var newParameters = new ParameterContainer(animID, eventIndex,
+                        containingTae.BigEndian, ParameterBytes, template[containingTae.EventBank][Type]);
+                    foreach (var field in template[containingTae.EventBank][Type])
+                    {
+                        if (field.Value.ValueToAssert != null)
+                            continue;
+                        newParameters[field.Key] = Parameters[field.Key];
+                    }
+
+                    
+                }
+            }
+
             /// <summary>
             /// Applies a template to allow editing of the parameters.
             /// </summary>
