@@ -66,7 +66,7 @@ namespace SoulsAssetPipeline.Animation
             BlendHint = binding?.BlendHint ?? HKX.AnimationBlendHint.NORMAL;
         }
 
-        public NewBlendableTransform GetTransformOnFrameByBone(int hkxBoneIndex, float frame)
+        public NewBlendableTransform GetTransformOnFrameByBone(int hkxBoneIndex, float frame, bool enableLooping)
         {
             var track = HkxBoneIndexToTransformTrackMap[hkxBoneIndex];
 
@@ -93,9 +93,9 @@ namespace SoulsAssetPipeline.Animation
                 return defaultBoneTransformation;
             }
 
-            return GetTransformOnFrame(track, frame);
+            return GetTransformOnFrame(track, frame, enableLooping);
         }
-        public abstract NewBlendableTransform GetTransformOnFrame(int transformIndex, float frame);
+        public abstract NewBlendableTransform GetTransformOnFrame(int transformIndex, float frame, bool enableLooping);
 
     }
 
@@ -148,12 +148,12 @@ namespace SoulsAssetPipeline.Animation
             return (int)((frame % (FrameCount - 1)) / (NumFramesPerBlock - 1));
         }
 
-        private NewBlendableTransform GetTransformOnSpecificBlockAndFrame(int transformIndex, int block, float frame)
+        private NewBlendableTransform GetTransformOnSpecificBlockAndFrame(int transformIndex, int block, float frame, bool enableLooping)
         {
             while (frame < 0)
                 frame += FrameCount;
 
-            frame = (frame % (FrameCount - 1)) % (NumFramesPerBlock - 1);
+            frame = (enableLooping ? (frame % (FrameCount - 1)) : (Math.Min(frame, FrameCount))) % (NumFramesPerBlock - 1);
 
             NewBlendableTransform result = NewBlendableTransform.Identity;
             var track = Tracks[block][transformIndex];
@@ -317,14 +317,16 @@ namespace SoulsAssetPipeline.Animation
             return result;
         }
 
-        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame)
+        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame, bool enableLooping)
         {
             int blockIndex = GetBlock(frame);
 
-            float frameInBlock = (frame % (FrameCount - 1)) % (NumFramesPerBlock - 1);
+
+
+            float frameInBlock = (enableLooping ? (frame % (FrameCount - 1)) : (Math.Min(frame, FrameCount))) % (NumFramesPerBlock - 1);
 
             NewBlendableTransform currentFrame = GetTransformOnSpecificBlockAndFrame(transformTrackIndex,
-                    block: blockIndex, frame);
+                    block: blockIndex, frame, enableLooping);
             return currentFrame;
 
             //if (frame >= FrameCount - 1)
@@ -360,9 +362,6 @@ namespace SoulsAssetPipeline.Animation
 
             FrameDuration = Duration / (FrameCount - 1);
 
-            Duration += FrameDuration;
-            //FrameCount += 1;
-
             HkxBoneIndexToTransformTrackMap = new int[skeleton.Bones.Size];
             TransformTrackIndexToHkxBoneMap = new int[binding.TransformTrackToBoneIndices.Size];
 
@@ -397,22 +396,21 @@ namespace SoulsAssetPipeline.Animation
             }
         }
 
-        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame)
+        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame, bool enableLooping)
         {
-            float loopedFrame = frame % (FrameCount);
+            float loopedFrame = (enableLooping ? frame % (FrameCount - 1) : frame);
 
-            NewBlendableTransform currentFrame = GetTransformOnFrame((int)Math.Floor(loopedFrame), transformTrackIndex);
-            NewBlendableTransform nextFrame = GetTransformOnFrame((int)Math.Ceiling(loopedFrame), transformTrackIndex);
-            return NewBlendableTransform.Lerp(currentFrame, nextFrame, loopedFrame % 1);
-        }
-
-        public NewBlendableTransform GetTransformOnFrame(int frame, int trackIndex)
-        {
-            while (frame < 0)
+            if (frame < 0)
                 frame += FrameCount;
 
-            int index = (TransformTrackCount * (frame % (FrameCount))) + trackIndex;
-            return Transforms[index];
+            if (frame > FrameCount)
+                frame = FrameCount;
+
+
+
+            NewBlendableTransform currentFrame = Transforms[(TransformTrackCount * (int)Math.Floor(loopedFrame)) + transformTrackIndex];
+            NewBlendableTransform nextFrame = Transforms[(TransformTrackCount * (int)Math.Ceiling(loopedFrame)) + transformTrackIndex];
+            return NewBlendableTransform.Lerp(currentFrame, nextFrame, loopedFrame % 1);
         }
     }
 }

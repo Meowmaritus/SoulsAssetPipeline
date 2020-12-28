@@ -406,10 +406,15 @@ namespace SoulsAssetPipeline.AnimationImporting
             }
         }
 
-        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame)
+        public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame, bool enableLooping)
         {
             var frameRatio = frame % 1;
-            frame = frame % FrameCount;
+
+            if (enableLooping)
+                frame = frame % FrameCount;
+            else
+                frame = Math.Min(frame, FrameCount);
+
             if (frameRatio != 0)
             {
                 var blendFrom = Frames[(int)Math.Floor(frame)].BoneTransforms[transformTrackIndex];

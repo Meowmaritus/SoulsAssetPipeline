@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using NMatrix = System.Numerics.Matrix4x4;
 using NVector3 = System.Numerics.Vector3;
+using NVector4 = System.Numerics.Vector4;
 using NQuaternion = System.Numerics.Quaternion;
 
 namespace SoulsAssetPipeline.AnimationImporting
@@ -16,6 +17,8 @@ namespace SoulsAssetPipeline.AnimationImporting
         public class AnimationImportSettings
         {
             public float SceneScale = 1.0f;
+            public float RootMotionScaleOverride = 1.0f;
+            public bool UseRootMotionScaleOverride = false;
             public bool ConvertFromZUp = false; // Not needed for anims? need to see if it's just my test fbx
             public Dictionary<string, NewBlendableTransform> ExistingBoneDefaults = null;
             public HavokAnimationData ExistingHavokAnimationTemplate = null;
@@ -49,10 +52,10 @@ namespace SoulsAssetPipeline.AnimationImporting
         {
             ImportedAnimation result = new ImportedAnimation();
 
-            var sceneMatrix = System.Numerics.Matrix4x4.CreateScale(System.Numerics.Vector3.One * settings.SceneScale);
+            var sceneMatrix = NMatrix.Identity;
 
             if (!settings.FlipQuaternionHandedness)
-                sceneMatrix *= System.Numerics.Matrix4x4.CreateScale(-1, 1, 1);
+                sceneMatrix *= NMatrix.CreateScale(-1, 1, 1);
 
             if (settings.ExistingHavokAnimationTemplate == null)
             {
@@ -69,9 +72,21 @@ namespace SoulsAssetPipeline.AnimationImporting
 
             if (settings.ConvertFromZUp)
             {
-                sceneMatrix *= System.Numerics.Matrix4x4.CreateRotationZ((float)(Math.PI));
-                sceneMatrix *= System.Numerics.Matrix4x4.CreateRotationX((float)(-Math.PI / 2.0));
+                sceneMatrix *= NMatrix.CreateRotationZ((float)(Math.PI));
+                sceneMatrix *= NMatrix.CreateRotationX((float)(-Math.PI / 2.0));
             }
+
+            var sceneMatrix_ForRootMotion = NMatrix.CreateScale(NVector3.One * settings.SceneScale) * sceneMatrix;
+
+            if (settings.UseRootMotionScaleOverride)
+            {
+                sceneMatrix_ForRootMotion = NMatrix.CreateScale(NVector3.One * settings.RootMotionScaleOverride) * sceneMatrix;
+            }
+
+            sceneMatrix = NMatrix.CreateScale(NVector3.One * settings.SceneScale) * sceneMatrix;
+
+            
+
 
             foreach (var anim in scene.Animations)
             {
@@ -206,7 +221,7 @@ namespace SoulsAssetPipeline.AnimationImporting
                                 {
                                     int frame = (int)Math.Floor(keyPos.Time * resampleTickMult);
                                     result.Frames[frame].RootMotionTranslation =
-                                        System.Numerics.Vector3.Transform(keyPos.Value.ToNumerics(), sceneMatrix);
+                                        NVector3.Transform(keyPos.Value.ToNumerics(), sceneMatrix_ForRootMotion);
 
                                     //if (settings.FlipQuaternionHandedness)
                                     //{
@@ -220,7 +235,7 @@ namespace SoulsAssetPipeline.AnimationImporting
                                         var blendFrom = result.Frames[lastKeyIndex].RootMotionTranslation;
                                         var blendTo = result.Frames[frame].RootMotionTranslation;
 
-                                        result.Frames[f].RootMotionTranslation = System.Numerics.Vector3.Lerp(blendFrom, blendTo, lerpS);
+                                        result.Frames[f].RootMotionTranslation = NVector3.Lerp(blendFrom, blendTo, lerpS);
                                     }
                                     lastKeyIndex = frame;
                                 }
@@ -259,8 +274,8 @@ namespace SoulsAssetPipeline.AnimationImporting
                                         var blendFrom = rootMotionRotationFrames[lastKeyIndex];
                                         var blendTo = curFrameRotation;
 
-                                        var blended = System.Numerics.Quaternion.Slerp(blendFrom, blendTo, lerpS);
-                                        //blended = System.Numerics.Quaternion.Normalize(blended);
+                                        var blended = NQuaternion.Slerp(blendFrom, blendTo, lerpS);
+                                        //blended = NQuaternion.Normalize(blended);
 
                                         rootMotionRotationFrames[f] = blended;
                                     }
@@ -306,7 +321,7 @@ namespace SoulsAssetPipeline.AnimationImporting
                                         int frame = (int)Math.Floor(keyPos.Time * resampleTickMult);
 
                                         var curFrameTransform = result.Frames[frame].BoneTransforms[transformIndex];
-                                        curFrameTransform.Translation = System.Numerics.Vector3.Transform(keyPos.Value.ToNumerics(), sceneMatrix);
+                                        curFrameTransform.Translation = NVector3.Transform(keyPos.Value.ToNumerics(), sceneMatrix);
                                         result.Frames[frame].BoneTransforms[transformIndex] = curFrameTransform;
 
                                         // Fill in from the last keyframe to this one
@@ -316,7 +331,7 @@ namespace SoulsAssetPipeline.AnimationImporting
                                             var blendFrom = result.Frames[lastKeyIndex].BoneTransforms[transformIndex].Translation;
                                             var blendTo = curFrameTransform.Translation;
 
-                                            var blended = System.Numerics.Vector3.Lerp(blendFrom, blendTo, lerpS);
+                                            var blended = NVector3.Lerp(blendFrom, blendTo, lerpS);
 
                                             var copyOfStruct = result.Frames[f].BoneTransforms[transformIndex];
                                             copyOfStruct.Translation = blended;
@@ -354,7 +369,7 @@ namespace SoulsAssetPipeline.AnimationImporting
                                             var blendFrom = result.Frames[lastKeyIndex].BoneTransforms[transformIndex].Scale;
                                             var blendTo = curFrameTransform.Scale;
 
-                                            var blended = System.Numerics.Vector3.Lerp(blendFrom, blendTo, lerpS);
+                                            var blended = NVector3.Lerp(blendFrom, blendTo, lerpS);
 
                                             var copyOfStruct = result.Frames[f].BoneTransforms[transformIndex];
                                             copyOfStruct.Scale = blended;
@@ -399,8 +414,8 @@ namespace SoulsAssetPipeline.AnimationImporting
                                             var blendFrom = result.Frames[lastKeyIndex].BoneTransforms[transformIndex].Rotation;
                                             var blendTo = curFrameTransform.Rotation;
 
-                                            var blended = System.Numerics.Quaternion.Slerp(blendFrom, blendTo, lerpS);
-                                            //blended = System.Numerics.Quaternion.Normalize(blended);
+                                            var blended = NQuaternion.Slerp(blendFrom, blendTo, lerpS);
+                                            //blended = NQuaternion.Normalize(blended);
 
                                             var copyOfStruct = result.Frames[f].BoneTransforms[transformIndex];
                                             copyOfStruct.Rotation = blended;
@@ -486,8 +501,8 @@ namespace SoulsAssetPipeline.AnimationImporting
             }
 
             result.RootMotion = new RootMotionData(
-                new System.Numerics.Vector4(0, 1, 0, 0),
-                new System.Numerics.Vector4(0, 0, 1, 0),
+                new NVector4(0, 1, 0, 0),
+                new NVector4(0, 0, 1, 0),
                 result.Duration, result.Frames.Select(f => f.RootMotion).ToArray());
             
             // Copy first frame for loop?
@@ -505,7 +520,7 @@ namespace SoulsAssetPipeline.AnimationImporting
                 result.Frames[i].RootMotionTranslation.Z -= rootMotionStart.Z;
                 result.Frames[i].RootMotionRotation -= rootMotionStart.W;
 
-                var xyz = System.Numerics.Vector3.Transform(result.Frames[i].RootMotion.XYZ(), System.Numerics.Matrix4x4.CreateRotationY(-rootMotionStart.W));
+                var xyz = NVector3.Transform(result.Frames[i].RootMotion.XYZ(), NMatrix.CreateRotationY(-rootMotionStart.W));
                 result.Frames[i].RootMotionTranslation.X = xyz.X;
                 result.Frames[i].RootMotionTranslation.Y = xyz.Y;
                 result.Frames[i].RootMotionTranslation.Z = xyz.Z;

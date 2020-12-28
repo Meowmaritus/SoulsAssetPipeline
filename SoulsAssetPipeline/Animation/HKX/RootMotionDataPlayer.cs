@@ -97,6 +97,44 @@ namespace SoulsAssetPipeline.Animation
             return deltaStartToEnd;
         }
 
+        public void ApplyExternalTransformSuchThatCurrentTransformMatches(NVector4 desiredCurrentTransform)
+        {
+            ApplyExternalTransform(desiredCurrentTransform - CurrentTransform);
+        }
+
+        public void ApplyExternalTransform(float rotation, NVector3 translation)
+        {
+            ApplyExternalTransform(new NVector4(translation.X, translation.Y, translation.Z, rotation));
+        }
+
+        public void ApplyExternalTransform(NVector4 transform)
+        {
+            // Find where loop start is relative to current location
+            var deltaCurrentToLoopStart = (LoopStartTransform - CurrentTransform);
+
+
+            // Rotate loop start such that the current location is pivoted
+            var newTranslation = NVector3.Transform(deltaCurrentToLoopStart.XYZ(), NMatrix.CreateRotationY(transform.W));
+            deltaCurrentToLoopStart.X = CurrentTransform.X + newTranslation.X + transform.X;
+            deltaCurrentToLoopStart.Y = CurrentTransform.Y + newTranslation.Y + transform.Y;
+            deltaCurrentToLoopStart.Z = CurrentTransform.Z + newTranslation.Z + transform.Z;
+            deltaCurrentToLoopStart.W = LoopStartTransform.W + transform.W;
+
+            LoopStartTransform = deltaCurrentToLoopStart;
+
+            var tr = CurrentTransform;
+            tr += transform;
+            CurrentTransform = tr;
+
+            tr = PreviousFrameTransform;
+            tr += transform;
+            PreviousFrameTransform = tr;
+
+            //tr = LoopStartTransform;
+            //tr.W += rotation;
+            //LoopStartTransform = tr;
+        }
+
         public void Scrub(float deltaTime)
         {
             SetTime(CurrentTime + deltaTime);

@@ -6,16 +6,17 @@ using System.Threading.Tasks;
 
 namespace SoulsAssetPipeline
 {
+    [Flags]
     public enum SoulsGames
     {
-        None,
-        DES,
-        DS1,
-        DS1R,
-        DS2,
-        DS2SOTFS,
-        DS3,
-        BB,
-        SDT,
+        None = 0,
+        DES = 1 << 0,
+        DS1 = 1 << 1,
+        DS1R = 1 << 2,
+        DS2 = 1 << 3,
+        DS2SOTFS = 1 << 4,
+        DS3 = 1 << 5,
+        BB = 1 << 6,
+        SDT = 1 << 7,
     }
 }

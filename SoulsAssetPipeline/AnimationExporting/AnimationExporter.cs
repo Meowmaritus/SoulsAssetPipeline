@@ -47,7 +47,7 @@ namespace SoulsAssetPipeline.AnimationExporting
                 animTrack.NodeName = trackName;
                 for (int f = 0; f < anim.FrameCount; f++)
                 {
-                    var t = anim.GetTransformOnFrame(i, f);
+                    var t = anim.GetTransformOnFrame(i, f, enableLooping: false);
                     animTrack.PositionKeys.Add(new VectorKey(1.0 * f * anim.FrameDuration, new Vector3D(t.Translation.X * -100, t.Translation.Y * 100, t.Translation.Z * 100)));
                     animTrack.ScalingKeys.Add(new VectorKey(1.0 * f * anim.FrameDuration, new Vector3D(t.Scale.X, t.Scale.Y, t.Scale.Z)));
                     var q = t.Rotation;

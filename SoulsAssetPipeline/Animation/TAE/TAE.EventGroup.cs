@@ -26,7 +26,7 @@ namespace SoulsAssetPipeline.Animation
 
             }
 
-            public EventGroupData GroupData { get; set; } = null;
+            public EventGroupDataStruct GroupData;
 
             public enum EventGroupDataType : long
             {
@@ -36,91 +36,21 @@ namespace SoulsAssetPipeline.Animation
                 GroupData192 = 192,
             }
 
-            public class EventGroupData
+            public struct EventGroupDataStruct
             {
-                internal virtual int GetGroupTypeThisIsFor() => -1;
-                public virtual void ReadInner(BinaryReaderEx br)
+                public EventGroupDataType DataType;
+                public enum EntityTypes : ushort
                 {
-
+                    Character = 0,
+                    Object = 1,
+                    MapPiece = 2,
+                    DummyNode = 4,
                 }
-                public virtual void WriteInner(BinaryWriterEx bw)
-                {
-
-                }
-                public void Read(BinaryReaderEx br)
-                {
-                    long dataOffset = br.ReadVarint();
-                    if (dataOffset != 0)
-                        ReadInner(br);
-                }
-                public void Write(BinaryWriterEx bw)
-                {
-                    bw.ReserveVarint("EventGroupDataOffset");
-                    long dataStartPos = bw.Position;
-                    WriteInner(bw);
-                    if (dataStartPos != bw.Position)
-                    {
-                        bw.FillVarint("EventGroupDataOffset", dataStartPos);
-                    }
-                    else
-                    {
-                        bw.FillVarint("EventGroupDataOffset", 0);
-                    }
-                }
-
-                public class GroupData0 : EventGroupData
-                {
-                    internal override int GetGroupTypeThisIsFor() => 0;
-                }
-
-                public class GroupData16 : EventGroupData
-                {
-                    internal override int GetGroupTypeThisIsFor() => 16;
-                }
-
-                public class ApplyToSpecificCutsceneEntity : EventGroupData
-                {
-
-                    internal override int GetGroupTypeThisIsFor() => 128;
-
-                    public enum EntityTypes : ushort
-                    {
-                        Character = 0,
-                        Object = 1,
-                        MapPiece = 2,
-                        DummyNode = 4,
-                    }
-                    public EntityTypes CutsceneEntityType { get; set; } = EntityTypes.Character;
-                    public short CutsceneEntityIDPart1 { get; set; } = 0;
-                    public short CutsceneEntityIDPart2 { get; set; } = 0;
-                    public sbyte Area { get; set; } = -1;
-                    public sbyte Block { get; set; } = -1;
-                    public override void ReadInner(BinaryReaderEx br)
-                    {
-                        CutsceneEntityType = br.ReadEnum16<EntityTypes>();
-                        CutsceneEntityIDPart1 = br.ReadInt16();
-                        CutsceneEntityIDPart2 = br.ReadInt16();
-                        Block = br.ReadSByte();
-                        Area = br.ReadSByte();
-                        br.AssertInt32(0);
-                        br.AssertInt32(0);
-                    }
-                    public override void WriteInner(BinaryWriterEx bw)
-                    {
-                        bw.WriteUInt16((ushort)CutsceneEntityType);
-                        bw.WriteInt16(CutsceneEntityIDPart1);
-                        bw.WriteInt16(CutsceneEntityIDPart2);
-                        bw.WriteSByte(Block);
-                        bw.WriteSByte(Area);
-                        bw.WriteInt32(0);
-                        bw.WriteInt32(0);
-                    }
-                }
-
-                public class GroupData192 : EventGroupData
-                {
-                    internal override int GetGroupTypeThisIsFor() => 192;
-                }
+                public EntityTypes CutsceneEntityType;
+                public short CutsceneEntityIDPart1;
+                public short CutsceneEntityIDPart2;
+                public sbyte Area;
+                public sbyte Block;
             }
 
             internal List<int> indices;
@@ -157,21 +87,25 @@ namespace SoulsAssetPipeline.Animation
                     }
                     else
                     {
-                        var groupDataType = (EventGroupDataType)GroupType;
-
-                        if (groupDataType == EventGroupDataType.GroupData0)
-                            GroupData = new EventGroupData.GroupData0();
-
-                        else if (groupDataType == EventGroupDataType.GroupData16)
-                            GroupData = new EventGroupData.GroupData16();
-
-                        else if (groupDataType == EventGroupDataType.ApplyToSpecificCutsceneEntity)
-                            GroupData = new EventGroupData.ApplyToSpecificCutsceneEntity();
-
-                        else if (groupDataType == EventGroupDataType.GroupData192)
-                            GroupData = new EventGroupData.GroupData192();
-
-                        GroupData.Read(br);
+                        GroupData.DataType = (EventGroupDataType)GroupType;
+                        long dataOffset = br.ReadVarint();
+                        if (dataOffset != 0)
+                        {
+                            br.StepIn(dataOffset);
+                            {
+                                if (GroupData.DataType == EventGroupDataType.ApplyToSpecificCutsceneEntity)
+                                {
+                                    GroupData.CutsceneEntityType = br.ReadEnum16<EventGroupDataStruct.EntityTypes>();
+                                    GroupData.CutsceneEntityIDPart1 = br.ReadInt16();
+                                    GroupData.CutsceneEntityIDPart2 = br.ReadInt16();
+                                    GroupData.Block = br.ReadSByte();
+                                    GroupData.Area = br.ReadSByte();
+                                    br.AssertInt32(0);
+                                    br.AssertInt32(0);
+                                }
+                            }
+                            br.StepOut();
+                        }
                     }
                 }
                 br.StepOut();
@@ -214,14 +148,33 @@ namespace SoulsAssetPipeline.Animation
                 }
                 else
                 {
-                    if (GroupData != null)
+                    bw.ReserveVarint("EventGroupDataOffset");
+                    long dataStartPos = bw.Position;
+                    
+                    if (GroupData.DataType == EventGroupDataType.ApplyToSpecificCutsceneEntity)
                     {
-                        if (GroupData?.GetGroupTypeThisIsFor() != GroupType)
-                        {
-                            throw new InvalidDataException("TAE event group data is not for the correct type.");
-                        }
+                        bw.WriteUInt16((ushort)(GroupData.CutsceneEntityType));
+                        bw.WriteInt16(GroupData.CutsceneEntityIDPart1);
+                        bw.WriteInt16(GroupData.CutsceneEntityIDPart2);
+                        bw.WriteSByte(GroupData.Block);
+                        bw.WriteSByte(GroupData.Area);
+                        bw.WriteInt32(0);
+                        bw.WriteInt32(0);
+                    }
 
-                        GroupData.Write(bw);
+                    if (dataStartPos != bw.Position)
+                    {
+                        bw.FillVarint("EventGroupDataOffset", dataStartPos);
+                    }
+                    else
+                    {
+                        bw.FillVarint("EventGroupDataOffset", 0);
+                    }
+
+
+                    if ((int)GroupData.DataType != GroupType)
+                    {
+                        throw new InvalidDataException("TAE event group data is not for the correct type.");
                     }
                 }
 
