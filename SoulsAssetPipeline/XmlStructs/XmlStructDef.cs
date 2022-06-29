@@ -120,5 +120,17 @@ namespace SoulsAssetPipeline.XmlStructs
         {
             return ((IList<XmlStructDefField>)_fields).GetEnumerator();
         }
+
+        public static bool operator !=(XmlStructDef lhs, XmlStructDef rhs)
+        {
+
+
+            return false;
+        }
+
+        public static bool operator ==(XmlStructDef lhs, XmlStructDef rhs)
+        {
+            return true;
+        }
     }
 }
