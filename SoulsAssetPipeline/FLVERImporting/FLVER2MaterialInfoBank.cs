@@ -168,7 +168,7 @@ namespace SoulsAssetPipeline.FLVERImporting
                     return false;
                 }
 
-                if (Check("Diffuse", "Albedo"))
+                if (Check("Diffuse", "Albedo", "_DistortionDepth"))
                     t.Semantic = TextureChannelSemantic.Diffuse;
 
                 else if (Check("Specular", "Reflectance"))
