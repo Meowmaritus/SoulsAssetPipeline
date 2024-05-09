@@ -1078,6 +1078,11 @@ namespace SoulsAssetPipeline.Animation
                     br.StepIn(fu.Dst);
                     data.Read(hkx, section, br, variation);
                     Data.DestObject = data;
+
+                    // Workaround
+                    FakeMemeData = data.Data;
+
+
                     Data.Section = section;
                     br.StepOut();
 
