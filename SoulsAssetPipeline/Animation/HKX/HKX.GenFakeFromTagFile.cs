@@ -204,6 +204,68 @@ namespace SoulsAssetPipeline.Animation
                                         hkaSplineCompressedAnimation.InverseBlockDuration = (kvp.Value as HkSingle).Value;
                                     else if (kvp.Key.Name == "frameDuration")
                                         hkaSplineCompressedAnimation.FrameDuration = (kvp.Value as HkSingle).Value;
+                                    else if (kvp.Key.Name == "blockOffsets")
+                                    {
+                                        var arrData = new HKArrayData<HKUInt>();
+                                        arrData.Elements = new List<HKUInt>();
+
+                                        if (kvp.Value?.Value != null)
+                                        {
+                                            var blockOffsets = (kvp.Value.Value as IReadOnlyList<IHkObject>).Select(x => ((HkUInt32)x).Value).ToList();
+                                            foreach (var b in blockOffsets)
+                                            {
+                                                arrData.Elements.Add(new HKUInt() { data = b });
+                                            }
+                                        }
+                                        hkaSplineCompressedAnimation.BlockOffsets = new HKArray<HKUInt>(arrData);
+                                    }
+                                    else if (kvp.Key.Name == "floatBlockOffsets")
+                                    {
+                                        var arrData = new HKArrayData<HKUInt>();
+                                        arrData.Elements = new List<HKUInt>();
+
+                                        if (kvp.Value?.Value != null)
+                                        {
+                                            var blockOffsets = (kvp.Value.Value as IReadOnlyList<IHkObject>).Select(x => ((HkUInt32)x).Value).ToList();
+                                            foreach (var b in blockOffsets)
+                                            {
+                                                arrData.Elements.Add(new HKUInt() { data = b });
+                                            }
+                                        }
+                                        hkaSplineCompressedAnimation.FloatBlockOffsets = new HKArray<HKUInt>(arrData);
+                                    }
+                                    else if (kvp.Key.Name == "transformOffsets")
+                                    {
+                                        
+                                        var arrData = new HKArrayData<HKUInt>();
+                                        arrData.Elements = new List<HKUInt>();
+
+                                        if (kvp.Value?.Value != null)
+                                        {
+                                            var blockOffsets = (kvp.Value.Value as IReadOnlyList<IHkObject>).Select(x => ((HkUInt32)x).Value).ToList();
+                                            foreach (var b in blockOffsets)
+                                            {
+                                                arrData.Elements.Add(new HKUInt() { data = b });
+                                            }
+                                        }
+
+                                        hkaSplineCompressedAnimation.TransformOffsets = new HKArray<HKUInt>(arrData);
+                                    }
+                                    else if (kvp.Key.Name == "floatOffsets")
+                                    {
+                                        var arrData = new HKArrayData<HKUInt>();
+                                        arrData.Elements = new List<HKUInt>();
+
+                                        if (kvp.Value?.Value != null)
+                                        {
+                                            var blockOffsets = (kvp.Value.Value as IReadOnlyList<IHkObject>).Select(x => ((HkUInt32)x).Value).ToList();
+                                            foreach (var b in blockOffsets)
+                                            {
+                                                arrData.Elements.Add(new HKUInt() { data = b });
+                                            }
+                                        }
+                                        hkaSplineCompressedAnimation.FloatOffsets = new HKArray<HKUInt>(arrData);
+                                    }
                                     else if (kvp.Key.Name == "data")
                                     {
                                         var arrData = new HKArrayData<HKByte>();
@@ -215,27 +277,27 @@ namespace SoulsAssetPipeline.Animation
 
                                         hkaSplineCompressedAnimation.Data = new HKArray<HKByte>(arrData);
 
-                                        hkaSplineCompressedAnimation.BlockOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
-                                        {
-                                            Elements = new List<HKUInt>() { new HKUInt() { data = 0 } }
-                                        });
+                                        //hkaSplineCompressedAnimation.BlockOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
+                                        //{
+                                        //    Elements = new List<HKUInt>() { new HKUInt() { data = 0 } }
+                                        //});
 
-                                        hkaSplineCompressedAnimation.FloatBlockOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
-                                        {
-                                            Elements = new List<HKUInt>() { new HKUInt() { data = (uint)arrData.Elements.Count - 1 } }
-                                        });
+                                        //hkaSplineCompressedAnimation.FloatBlockOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
+                                        //{
+                                        //    Elements = new List<HKUInt>() { new HKUInt() { data = (uint)arrData.Elements.Count - 1 } }
+                                        //});
 
                                         hkaSplineCompressedAnimation.Endian = 0;
 
-                                        hkaSplineCompressedAnimation.TransformOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
-                                        {
-                                            Elements = new List<HKUInt>() { }
-                                        });
+                                        //hkaSplineCompressedAnimation.TransformOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
+                                        //{
+                                        //    Elements = new List<HKUInt>() { }
+                                        //});
 
-                                        hkaSplineCompressedAnimation.FloatOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
-                                        {
-                                            Elements = new List<HKUInt>() { }
-                                        });
+                                        //hkaSplineCompressedAnimation.FloatOffsets = new HKArray<HKUInt>(new HKArrayData<HKUInt>()
+                                        //{
+                                        //    Elements = new List<HKUInt>() { }
+                                        //});
                                     }
                                 }
 

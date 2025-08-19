@@ -13,7 +13,7 @@ namespace SoulsAssetPipeline.AnimationImporting
     public class ImportedAnimation : HavokAnimationData
     {
         public ImportedAnimation()
-            : base ("SAP Custom Animation", null, null, null)
+            : base (-1, "SAP Custom Animation", null, null, null)
         {
 
         }
@@ -351,9 +351,9 @@ namespace SoulsAssetPipeline.AnimationImporting
                                         writer.WriteAttributeString("name", "blendHint");
                                         if (BlendHint == HKX.AnimationBlendHint.NORMAL)
                                             writer.WriteString("NORMAL");
-                                        else if (BlendHint == HKX.AnimationBlendHint.ADDITIVE)
+                                        else if (BlendHint == HKX.AnimationBlendHint.ADDITIVE_CHILD_SPACE)
                                             writer.WriteString("ADDITIVE");
-                                        else if (BlendHint == HKX.AnimationBlendHint.ADDITIVE_DEPRECATED)
+                                        else if (BlendHint == HKX.AnimationBlendHint.ADDITIVE_PARENT_SPACE)
                                             writer.WriteString("ADDITIVE");
                                     }
                                     writer.WriteEndElement();

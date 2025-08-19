@@ -148,6 +148,12 @@ namespace SoulsAssetPipeline.Animation
 
         public void SetTime(float newTime)
         {
+            // Bruh
+            if (newTime > 1000)
+                newTime = 1000;
+            if (newTime < -1000)
+                newTime = 0;
+
             if (Data?.Duration == 0)
             {
                 newTime = 0;
@@ -176,6 +182,11 @@ namespace SoulsAssetPipeline.Animation
             // do while instead of while so that it always does at least once. handles delta of 0 refresh case
             do
             {
+                // Bruh
+                if (newTime > 1000)
+                    newTime = 1000;
+                if (newTime < -1000)
+                    newTime = 0;
                 int newLoopNum = (int)Math.Floor(newTime / Data.Duration);
                 if (newLoopNum > CurrentLoopNum)
                 {

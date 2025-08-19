@@ -10,14 +10,15 @@ namespace SoulsAssetPipeline.Animation
     
     public abstract class HavokAnimationData
     {
+        public long ID { get; internal set; }
         public string Name { get; internal set;  }
 
         public RootMotionData RootMotion { get; internal set; }
 
         public HKX.AnimationBlendHint BlendHint = HKX.AnimationBlendHint.NORMAL;
 
-        public bool IsAdditiveBlend => BlendHint == HKX.AnimationBlendHint.ADDITIVE ||
-            BlendHint == HKX.AnimationBlendHint.ADDITIVE_DEPRECATED;
+        public bool IsAdditiveBlend => BlendHint == HKX.AnimationBlendHint.ADDITIVE_CHILD_SPACE ||
+            BlendHint == HKX.AnimationBlendHint.ADDITIVE_PARENT_SPACE;
 
         public HKX.HKASkeleton hkaSkeleton;
 
@@ -52,14 +53,16 @@ namespace SoulsAssetPipeline.Animation
             return res;
         }
 
-        public HavokAnimationData(string name)
+        public HavokAnimationData(long id, string name)
         {
+            ID = id;
             Name = name;
         }
 
-        public HavokAnimationData(string Name, HKX.HKASkeleton skeleton, HKX.HKADefaultAnimatedReferenceFrame refFrame, HKX.HKAAnimationBinding binding)
+        public HavokAnimationData(long id, string name, HKX.HKASkeleton skeleton, HKX.HKADefaultAnimatedReferenceFrame refFrame, HKX.HKAAnimationBinding binding)
         {
-            this.Name = Name;
+            ID = id;
+            Name = name;
 
             hkaSkeleton = skeleton;
 
@@ -104,10 +107,24 @@ namespace SoulsAssetPipeline.Animation
 
     }
 
+    public class HavokAnimationData_Dummy : HavokAnimationData
+    {
+        public HavokAnimationData_Dummy(long id, string name)
+            : base(id, name)
+        {
+            
+        }
+
+        public override NewBlendableTransform GetTransformOnFrame(int transformIndex, float frame, bool enableLooping)
+        {
+            return NewBlendableTransform.Identity;
+        }
+    }
+
     public class HavokAnimationData_SplineCompressed : HavokAnimationData
     {
-        public HavokAnimationData_SplineCompressed(string name, HKX.HKASplineCompressedAnimation anim)
-           : base(name)
+        public HavokAnimationData_SplineCompressed(long id, string name, HKX.HKASplineCompressedAnimation anim)
+           : base(id, name)
         {
             Duration = anim.Duration;// Math.Max(anim.Duration, anim.FrameDuration * anim.FrameCount);
             FrameCount = anim.FrameCount;
@@ -122,9 +139,9 @@ namespace SoulsAssetPipeline.Animation
         }
 
 
-        public HavokAnimationData_SplineCompressed(string name, HKX.HKASkeleton skeleton,
+        public HavokAnimationData_SplineCompressed(long id, string name, HKX.HKASkeleton skeleton,
            HKX.HKADefaultAnimatedReferenceFrame refFrame, HKX.HKAAnimationBinding binding, HKX.HKASplineCompressedAnimation anim)
-           : base(name, skeleton, refFrame, binding)
+           : base(id, name, skeleton, refFrame, binding)
         {
             Duration = anim.Duration;// Math.Max(anim.Duration, anim.FrameDuration * anim.FrameCount);
             FrameCount = anim.FrameCount;
@@ -175,14 +192,28 @@ namespace SoulsAssetPipeline.Animation
 
         private NewBlendableTransform GetTransformOnSpecificBlockAndFrame(int transformIndex, int block, float frame, bool enableLooping)
         {
-            while (frame < 0)
-                frame += FrameCount;
+            //if (transformIndex == 172)
+            //{
+            //    Console.WriteLine("teste");
+            //}
+            ////Bruh
+            //if (frame < 1000)
+            //    frame = 0;
+
+            //while (frame < 0)
+            //    frame += FrameCount;
+
+            //if (frame < 0)
+            //{
+            //    var loopMult = MathF.Ceiling(Math.Abs(frame) / FrameCount);
+            //    frame += (FrameCount) * loopMult;
+            //}
 
             if (block < 0)
                 block = 0;
 
             frame = (enableLooping ? (frame % (FrameCount - 1)) : (Math.Min(frame, FrameCount))) % (NumFramesPerBlock - 1);
-
+            
             NewBlendableTransform result = NewBlendableTransform.Identity;
             var track = Tracks[block][transformIndex];
             var skeleTransform = hkaSkeleton != null ? hkaSkeleton.Transforms[TransformTrackIndexToHkxBoneMap[transformIndex]] : new HKX.Transform() { Scale = new HKX.HKVector4(new Vector4(1,1,1,1)) };
@@ -196,13 +227,13 @@ namespace SoulsAssetPipeline.Animation
 
             if (track.SplineScale != null)
             {
-                result.Scale.X = track.SplineScale.GetValueX(frame)
+                result.Scale.X = track.SplineScale.GetValueX(frame, FrameCount)
                     ?? (IsAdditiveBlend ? 1 : skeleTransform.Scale.Vector.X);
 
-                result.Scale.Y = track.SplineScale.GetValueY(frame)
+                result.Scale.Y = track.SplineScale.GetValueY(frame, FrameCount)
                     ?? (IsAdditiveBlend ? 1 : skeleTransform.Scale.Vector.Y);
 
-                result.Scale.Z = track.SplineScale.GetValueZ(frame)
+                result.Scale.Z = track.SplineScale.GetValueZ(frame, FrameCount)
                     ?? (IsAdditiveBlend ? 1 : skeleTransform.Scale.Vector.Z);
             }
             else
@@ -235,9 +266,10 @@ namespace SoulsAssetPipeline.Animation
             //    Console.WriteLine(":fatoof:");
             //}
 
+
             if (track.SplineRotation != null)//track.HasSplineRotation)
             {
-                result.Rotation = track.SplineRotation.GetValue(frame);
+                result.Rotation = track.SplineRotation.GetValue(frame, FrameCount);
             }
             else if (track.HasStaticRotation)
             {
@@ -263,6 +295,8 @@ namespace SoulsAssetPipeline.Animation
             //        skeleTransform.Rotation.Vector.W) * result.Rotation;
             //}
 
+            
+
             if (track.SplinePosition != null)
             {
                 //result.Translation.X = track.SplinePosition.GetValueX(frame)
@@ -274,11 +308,11 @@ namespace SoulsAssetPipeline.Animation
                 //result.Translation.Z = track.SplinePosition.GetValueZ(frame)
                 //    ?? (IsAdditiveBlend ? 0 : skeleTransform.Position.Vector.Z);
 
-                result.Translation.X = track.SplinePosition.GetValueX(frame) ?? 0;
+                result.Translation.X = track.SplinePosition.GetValueX(frame, FrameCount) ?? 0;
 
-                result.Translation.Y = track.SplinePosition.GetValueY(frame) ?? 0;
+                result.Translation.Y = track.SplinePosition.GetValueY(frame, FrameCount) ?? 0;
 
-                result.Translation.Z = track.SplinePosition.GetValueZ(frame) ?? 0;
+                result.Translation.Z = track.SplinePosition.GetValueZ(frame, FrameCount) ?? 0;
             }
             else
             {
@@ -342,11 +376,34 @@ namespace SoulsAssetPipeline.Animation
             //    result.Translation.Z += skeleTransform.Position.Vector.Z;
             //}
 
+            if (float.IsNaN(result.Scale.X))
+                result.Scale.X = 1;
+            if (float.IsNaN(result.Scale.Y))
+                result.Scale.Y = 1;
+            if (float.IsNaN(result.Scale.Z))
+                result.Scale.Z = 1;
+
+
+
             return result;
         }
 
         public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame, bool enableLooping)
         {
+            if (frame < 0)
+            {
+                var loopMult = MathF.Ceiling(Math.Abs(frame) / FrameCount);
+                frame += (FrameCount) * loopMult;
+
+                // Just in case??
+                if (frame < 0)
+                {
+                    frame += FrameCount;
+                }
+            }
+
+            
+
             int blockIndex = GetBlock(frame);
 
 
@@ -380,14 +437,16 @@ namespace SoulsAssetPipeline.Animation
         public int TransformTrackCount { get; }
         public List<NewBlendableTransform> Transforms { get; }
 
-        public HavokAnimationData_InterleavedUncompressed(string name, HKX.HKAInterleavedUncompressedAnimation anim)
-            : base(name)
+        public HavokAnimationData_InterleavedUncompressed(long id, string name, HKX.HKAInterleavedUncompressedAnimation anim)
+            : base(id, name)
         {
             Duration = anim.Duration;// Math.Max(anim.Duration, anim.FrameDuration * anim.FrameCount);
             TransformTrackCount = anim.TransformTrackCount;
             FrameCount = ((int)anim.Transforms.Size / anim.TransformTrackCount);
 
             FrameDuration = Duration / (FrameCount - 1);
+
+            //Duration += FrameDuration;
 
             Transforms = new List<NewBlendableTransform>((int)anim.Transforms.Capacity);
 
@@ -402,9 +461,9 @@ namespace SoulsAssetPipeline.Animation
             }
         }
 
-        public HavokAnimationData_InterleavedUncompressed(string name, HKX.HKASkeleton skeleton,
+        public HavokAnimationData_InterleavedUncompressed(long id, string name, HKX.HKASkeleton skeleton,
            HKX.HKADefaultAnimatedReferenceFrame refFrame, HKX.HKAAnimationBinding binding, HKX.HKAInterleavedUncompressedAnimation anim)
-           : base(name, skeleton, refFrame, binding)
+           : base(id, name, skeleton, refFrame, binding)
         {
             Duration = anim.Duration;// Math.Max(anim.Duration, anim.FrameDuration * anim.FrameCount);
             TransformTrackCount = anim.TransformTrackCount;
@@ -448,23 +507,41 @@ namespace SoulsAssetPipeline.Animation
 
         public override NewBlendableTransform GetTransformOnFrame(int transformTrackIndex, float frame, bool enableLooping)
         {
-            float loopedFrame = (enableLooping ? frame % (FrameCount) : frame);
-            if (loopedFrame < 0)
-                loopedFrame = 0;
-            if (frame < 0)
-                frame += FrameCount;
+            frame = (enableLooping ? frame % (FrameCount -1) : frame);
 
-            if (frame > FrameCount)
-                frame = FrameCount;
+            int curFrameIndex = (int)Math.Floor(frame);
+            int nextFrameIndex = (int)Math.Ceiling(frame);
 
-            int curFrameIndex = (int)Math.Floor(loopedFrame);
-            int nextFrameIndex = (int)Math.Ceiling(loopedFrame);
-            if (nextFrameIndex >= FrameCount)
-                nextFrameIndex = 0;
+            if (enableLooping)
+            {
+                if (curFrameIndex >= FrameCount - 1)
+                    curFrameIndex = 0;
+                else if (curFrameIndex < 0)
+                    curFrameIndex = FrameCount - 1;
+
+                if (nextFrameIndex >= FrameCount - 1)
+                    nextFrameIndex = 0;
+                else if (nextFrameIndex < 0)
+                    nextFrameIndex = FrameCount - 1;
+            }
+            else
+            {
+                if (curFrameIndex > FrameCount - 1)
+                    curFrameIndex = FrameCount - 1;
+                else if (curFrameIndex < 0)
+                    curFrameIndex = 0;
+
+                if (nextFrameIndex > FrameCount - 1)
+                    nextFrameIndex = FrameCount - 1;
+                else if (nextFrameIndex < 0)
+                    nextFrameIndex = 0;
+            }
+
+            
 
             NewBlendableTransform currentFrame = Transforms[(TransformTrackCount * curFrameIndex) + transformTrackIndex];
             NewBlendableTransform nextFrame = Transforms[(TransformTrackCount * nextFrameIndex) + transformTrackIndex];
-            return NewBlendableTransform.Lerp(currentFrame, nextFrame, loopedFrame % 1);
+            return NewBlendableTransform.Lerp(currentFrame, nextFrame, frame % 1);
         }
     }
 }

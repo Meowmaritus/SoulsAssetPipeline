@@ -9,11 +9,14 @@ namespace SoulsAssetPipeline.Animation
 {
     public struct NewBlendableTransform
     {
-        public Vector3 Translation;
-        public Vector3 Scale;
-        public Quaternion Rotation;
+        public Vector3 Translation = Vector3.Zero;
+        public Vector3 Scale = Vector3.One;
+        public Quaternion Rotation = Quaternion.Identity;
 
+        public NewBlendableTransform()
+        {
 
+        }
 
         public NewBlendableTransform(Vector3 translation, Vector3 scale, Quaternion rotation)
         {
@@ -112,6 +115,16 @@ namespace SoulsAssetPipeline.Animation
 
         public static NewBlendableTransform operator *(NewBlendableTransform a, NewBlendableTransform b)
         {
+            //return new NewBlendableTransform()
+            //{
+            //    Translation = a.Translation + b.Translation,
+            //    Rotation = Quaternion.Add( a.Rotation, b.Rotation),
+            //    //Rotation = Quaternion.CreateFromRotationMatrix(Matrix4x4.CreateFromQuaternion(a.Rotation) * Matrix4x4.CreateFromQuaternion(b.Rotation)),
+            //    Scale = a.Scale * b.Scale,
+            //};
+
+            //return new NewBlendableTransform(a.GetMatrixFull() * b.GetMatrixFull());
+
             return new NewBlendableTransform()
             {
                 Translation = a.Translation + b.Translation,
@@ -173,6 +186,14 @@ namespace SoulsAssetPipeline.Animation
                 Scale = Vector3.Lerp(a.Scale, b.Scale, s),
                 Rotation = Quaternion.Slerp(a.Rotation, b.Rotation, s),
             };
+        }
+
+        public Matrix4x4 GetMatrixFull()
+        {
+            return
+                Matrix4x4.CreateScale(Scale) *
+                Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(Rotation)) *
+                Matrix4x4.CreateTranslation(Translation);
         }
 
         public Matrix4x4 GetMatrixScale()

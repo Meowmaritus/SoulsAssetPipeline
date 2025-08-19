@@ -121,7 +121,7 @@ namespace SoulsAssetPipeline.Animation
                 file.IsDS1RAnimHotfix = isDS1RAnimHotfix;
                 file.Variation = variation;
                 file.DeserializeObjects = deserializeObjects;
-                br = SFUtil.GetDecompressedBR(br, out DCX.Type fileCompression);
+                br = SFUtil.GetDecompressedBinaryReader(br, out DCX.Type fileCompression);
                 file.Compression = fileCompression;
                 file.Read(br);
                 return file;
@@ -135,7 +135,7 @@ namespace SoulsAssetPipeline.Animation
             file.IsDS1RAnimHotfix = isDS1RAnimHotfix;
             file.Variation = variation;
             file.DeserializeObjects = deserializeObjects;
-            br = SFUtil.GetDecompressedBR(br, out DCX.Type fileCompression);
+            br = SFUtil.GetDecompressedBinaryReader(br, out DCX.Type fileCompression);
             file.Compression = fileCompression;
             file.Read(br);
             return file;
@@ -496,6 +496,11 @@ namespace SoulsAssetPipeline.Animation
                         else if (reference.ClassName.ClassName == "hkaInterleavedUncompressedAnimation")
                         {
                             hkobject = new HKAInterleavedUncompressedAnimation();
+                            hkobject.Read(hkx, this, br, variation);
+                        }
+                        else if (reference.ClassName.ClassName == "hkaQuantizedAnimation")
+                        {
+                            hkobject = new HKAQuantizedAnimation();
                             hkobject.Read(hkx, this, br, variation);
                         }
                         else if (reference.ClassName.ClassName == "hkaAnimationBinding")
@@ -1078,6 +1083,11 @@ namespace SoulsAssetPipeline.Animation
                     br.StepIn(fu.Dst);
                     data.Read(hkx, section, br, variation);
                     Data.DestObject = data;
+
+                    // Workaround
+                    FakeMemeData = data.Data;
+
+
                     Data.Section = section;
                     br.StepOut();
 
@@ -1338,7 +1348,7 @@ namespace SoulsAssetPipeline.Animation
             {
                 ClassNames = new List<HKXClassName>();
                 OffsetClassNamesMap = new Dictionary<uint, HKXClassName>();
-                while (br.ReadUInt16() != 0xFFFF)
+                while (br.Position < (br.Length - 5) && br.ReadUInt16() != 0xFFFF)
                 {
                     br.Position -= 2;
                     uint stringStart = (uint)br.Position + 5;

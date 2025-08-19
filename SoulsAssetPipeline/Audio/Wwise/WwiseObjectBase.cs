@@ -22,8 +22,8 @@ namespace SoulsAssetPipeline.Audio.Wwise
         }
 
 
-        static FieldInfo[] fieldsCache;
-        static Dictionary<string, FieldInfo> fieldsByName = new Dictionary<string, FieldInfo>();
+        FieldInfo[] fieldsCache;
+        Dictionary<string, FieldInfo> fieldsByName = new Dictionary<string, FieldInfo>();
 
         protected object GetFieldValue(string fieldName)
         {

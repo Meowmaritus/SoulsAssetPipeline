@@ -25,6 +25,11 @@ namespace SoulsAssetPipeline.Audio.Wwise
         internal override bool CustomRead(BinaryReaderEx br, IWwiseObject parent)
         {
             int listCount = parent.GetFieldAnyIntValue(ListCountField);
+            if ((listCount * 4) > (br.Length - br.Position))
+            {
+                list = new List<uint>();
+                return true;
+            }
             list = br.ReadUInt32s(listCount).ToList();
             return true;
         }

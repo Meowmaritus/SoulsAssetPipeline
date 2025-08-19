@@ -107,8 +107,8 @@ namespace SoulsAssetPipeline.FLVERImporting
                             memberBufferIndex = specifiedBufferIndex;
                         }
 
-
-                        bufferLayout.Add(new FLVER.LayoutMember(memberType, memberSemantic, memberIndex, memberBufferIndex));
+                        //SoulsFormatsNEXT workaround
+                        bufferLayout.Add(new FLVER.LayoutMember(memberType, memberSemantic, memberIndex, (short)(memberBufferIndex & 0xFFFF)));
                     }
                     Buffers.Add(bufferLayout);
                     bufferIndex++;

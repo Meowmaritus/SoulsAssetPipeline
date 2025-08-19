@@ -62,8 +62,8 @@ namespace SoulsAssetPipeline.Audio.Wwise
 
                 br.Position = sectionStart + sectionLength;
             }
-
-            Console.WriteLine("breakpoint");
+            
+            //Console.WriteLine("breakpoint");
         }
 
         protected override void Write(BinaryWriterEx bw)

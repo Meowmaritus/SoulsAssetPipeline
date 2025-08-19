@@ -15,50 +15,274 @@ namespace SoulsAssetPipeline.Animation
         /// </summary>
         public class Animation
         {
-            public enum MiniHeaderType : uint
+            public enum AnimFileHeaderType : uint
             {
                 /// <summary>
-                /// Standard AnimMiniHeader with three flags, 2 of which can reference specific parts of another animation.
+                /// Standard AnimFileHeader with three flags, one of which can import the motion from another animation.
                 /// </summary>
                 Standard = 0,
 
                 /// <summary>
-                /// AnimMiniHeader that signifies that the animation fully imports the motion data and all events from another animation.
+                /// AnimFileHeader that signifies that the animation fully imports the motion data and all actions from another animation.
                 /// </summary>
                 ImportOtherAnim = 1
             }
 
-            public abstract class AnimMiniHeader
+            public abstract class AnimFileHeader
             {
                 /// <summary>
-                /// Type of AnimMiniHeader that this is.
+                /// Type of AnimFileHeader that this is.
                 /// </summary>
-                public abstract MiniHeaderType Type { get; }
+                public AnimFileHeaderType Type { get; set; }
                 internal abstract void ReadInner(BinaryReaderEx br, TAEFormat format);
                 internal abstract void WriteInner(BinaryWriterEx bw, TAEFormat format);
+
+
+                //internal Guid? TEST_GUID = Guid.NewGuid();
+
+
+                internal void Write(BinaryWriterEx bw, TAEFormat format)
+                {
+                    bw.WriteVarint((int)Type);
+
+                    if (IsNullHeader)
+                    {
+                        bw.WriteVarint(0);
+                        
+                    }
+                    else
+                    {
+                        bw.ReserveVarint("AnimFileNameOffsetOffset");
+                        
+                        
+                    }
+
+                    if (format is TAEFormat.DES) // Not in DESR
+                        bw.Pad(0x10);
+
+
+                    
+
+
+                    if (IsNullHeader)
+                    {
+                        return;
+                    }
+
+
+                    bw.FillVarint("AnimFileNameOffsetOffset", bw.Position);
+
+                    bw.ReserveVarint("AnimFileNameOffset");
+
+
+                    //if (AnimFileReference)
+                    //{
+                    //    bw.WriteInt32(ReferenceID);
+
+                    //    bw.WriteBoolean(UnkReferenceFlag1);
+                    //    bw.WriteBoolean(ReferenceIsTAEOnly);
+                    //    bw.WriteBoolean(ReferenceIsHKXOnly);
+                    //    bw.WriteBoolean(LoopByDefault);
+                    //}
+                    //else
+                    //{
+                    //    bw.WriteBoolean(UnkReferenceFlag1);
+                    //    bw.WriteBoolean(ReferenceIsTAEOnly);
+                    //    bw.WriteBoolean(ReferenceIsHKXOnly);
+                    //    bw.WriteBoolean(LoopByDefault);
+
+                    //    bw.WriteInt32(ReferenceID);
+                    //}
+
+                    WriteInner(bw, format);
+
+                    if (!(format is TAEFormat.DES or TAEFormat.DS1 or TAEFormat.DESR))
+                    {
+                        bw.WriteVarint(0);
+                        bw.WriteVarint(0);
+                    }
+                    else
+                    {
+                        if (format is TAEFormat.DESR)
+                        {
+                            bw.WriteInt32(0);
+
+                            if (Type is AnimFileHeaderType.ImportOtherAnim)
+                                bw.WriteInt32(0);
+                        }
+                        else
+                        {
+                            bw.WriteVarint(0);
+
+                            if (Type is AnimFileHeaderType.ImportOtherAnim)
+                                bw.WriteVarint(0);
+                        }
+                    }
+
+                    bw.FillVarint("AnimFileNameOffset", bw.Position);
+                    if (!string.IsNullOrWhiteSpace(AnimFileName))
+                    {
+                        bw.WriteUTF16(AnimFileName, true);
+
+                        if (format is not TAEFormat.DS1)
+                            bw.Pad(0x10);
+                    }
+                    else
+                    {
+                        // Null terminate immediately
+                        bw.WriteInt16(0);
+                    }
+
+                    //TaeGuidTest
+                    //if (TEST_GUID != null)
+                    //{
+                    //    bw.WriteASCII("GUID");
+                    //    bw.WriteBytes(TEST_GUID.Value.ToByteArray());
+                    //}
+                }
+
+
+                internal static AnimFileHeader Read(BinaryReaderEx br, TAEFormat format, long timesOffset)
+                {
+                    var miniHeaderType = br.ReadEnum32<AnimFileHeaderType>();
+
+                    if (br.VarintLong)
+                        br.AssertInt32(0);
+
+                    var potentialFileNameOffsetOffset = br.GetNextPaddedOffsetAfterCurrentField(br.VarintSize, format == TAEFormat.DES ? 0x10 : 0);
+
+                    // Offset being read as 32bit int to deal with bad data in the upper 32bits of the offsets in DESR
+                    int actualFileNameOffsetOffset = br.AssertInt32((int)potentialFileNameOffsetOffset, 0);
+                    if (br.VarintLong)
+                        br.ReadInt32();
+
+                    AnimFileHeader header = null;
+
+                    if (actualFileNameOffsetOffset == 0)
+                    {
+                        if (miniHeaderType == AnimFileHeaderType.Standard)
+                            header = new AnimFileHeader.Standard();
+                        else if (miniHeaderType == AnimFileHeaderType.ImportOtherAnim)
+                            header = new AnimFileHeader.ImportOtherAnim();
+                        else
+                            throw new NotImplementedException($"{nameof(AnimFileHeader)} type not implemented yet.");
+
+                        header.IsNullHeader = true;
+                    }
+                    else
+                    {
+                        br.Position = actualFileNameOffsetOffset;
+
+                        // Offset being read as 32bit int to deal with bad data in the upper 32bits of the offsets in DESR
+                        int animFileNameOffset = br.ReadInt32();
+                        if (br.VarintLong)
+                            br.ReadInt32();
+
+
+
+                        if (miniHeaderType == AnimFileHeaderType.Standard)
+                            header = new AnimFileHeader.Standard();
+                        else if (miniHeaderType == AnimFileHeaderType.ImportOtherAnim)
+                            header = new AnimFileHeader.ImportOtherAnim();
+                        else
+                            throw new NotImplementedException($"{nameof(AnimFileHeader)} type not implemented yet.");
+
+                        header.ReadInner(br, format);
+
+                        if (!(format == TAEFormat.DES || format == TAEFormat.DS1 || format == TAEFormat.DESR))
+                        {
+                            br.AssertVarint(0);
+                            br.AssertVarint(0);
+                        }
+                        else
+                        {
+                            // Check for end of file for certain DESR files where this struct is the very last thing
+                            // and it does not have the padding in such case
+                            if (br.Position < br.Length)
+                            {
+                                if (format == TAEFormat.DESR)
+                                {
+                                    br.AssertInt32(0);
+
+                                    if (header.Type == AnimFileHeaderType.ImportOtherAnim)
+                                        br.AssertInt32(0);
+                                }
+                                else
+                                {
+                                    br.AssertVarint(0);
+
+                                    if (header.Type == AnimFileHeaderType.ImportOtherAnim)
+                                        br.AssertVarint(0);
+                                }
+                            }
+
+                        }
+
+                        if (animFileNameOffset < br.Length && animFileNameOffset != timesOffset)
+                        {
+                            if (br.GetInt64(animFileNameOffset) != 1)
+                            {
+                                var floatCheck = br.GetSingle(animFileNameOffset);
+                                if (!(floatCheck >= 0.016667f && floatCheck <= 100))
+                                {
+                                    header.AnimFileName = br.GetUTF16(animFileNameOffset);
+                                }
+                            }
+                        }
+
+                        header.AnimFileName = header.AnimFileName ?? "";
+
+                        // When Reference is false, there's always a filename.
+                        // When true, there's usually not, but sometimes there is, and I cannot figure out why.
+                        // Thus, this stupid hack to achieve byte-perfection.
+                        //var animNameCheck = AnimFileName.ToLower();
+                        //if (!(animNameCheck.EndsWith(".hkt") 
+                        //    || (format == TAEFormat.SDT && animNameCheck.EndsWith("hkt")) 
+                        //    || animNameCheck.EndsWith(".hkx") 
+                        //    || animNameCheck.EndsWith(".sib") 
+                        //    || animNameCheck.EndsWith(".hkxwin")))
+                        //    AnimFileName = "";
+                    }
+
+
+
+
+
+
+                    return header;
+                }
+
+                /// <summary>
+                /// Whether this header is completely null and unused
+                /// </summary>
+                public bool IsNullHeader { get; set; } = false;
+
+                public string AnimFileName { get; set; }
 
                 /// <summary>
                 /// Gets a clone of this not tied by reference.
                 /// </summary>
-                public abstract AnimMiniHeader GetClone();
+                public abstract AnimFileHeader GetClone();
 
                 /// <summary>
-                /// Standard MiniHeader with three flags, 2 of which can reference specific parts of another animation.
+                /// Standard AnimFileHeader with three flags, one of which can import motion data from another animation.
                 /// </summary>
-                public sealed class Standard : AnimMiniHeader
+                public sealed class Standard : AnimFileHeader
                 {
-                    /// <summary>
-                    /// Type of AnimMiniHeader that this is.
-                    /// </summary>
-                    public override MiniHeaderType Type => MiniHeaderType.Standard;
+                    public Standard()
+                    {
+                        Type = AnimFileHeaderType.Standard;
+                    }
 
                     /// <summary>
                     /// Gets a clone of this not tied by reference.
                     /// </summary>
-                    public override AnimMiniHeader GetClone()
+                    public override AnimFileHeader GetClone()
                     {
                         var newClone = new Standard();
-
+                        newClone.IsNullHeader = IsNullHeader;
+                        newClone.AnimFileName = AnimFileName;
+                        newClone.Type = Type;
                         newClone.IsLoopByDefault = IsLoopByDefault;
                         newClone.AllowDelayLoad = AllowDelayLoad;
                         newClone.ImportsHKX = ImportsHKX;
@@ -144,22 +368,24 @@ namespace SoulsAssetPipeline.Animation
                 }
 
                 /// <summary>
-                /// AnimMiniHeader that signifies that the animation fully imports the motion data and all events from another animation.
+                /// AnimFileHeader that signifies that the animation fully imports the motion data and all actions from another animation.
                 /// </summary>
-                public sealed class ImportOtherAnim : AnimMiniHeader
+                public sealed class ImportOtherAnim : AnimFileHeader
                 {
-                    /// <summary>
-                    /// Type of AnimMiniHeader that this is.
-                    /// </summary>
-                    public override MiniHeaderType Type => MiniHeaderType.ImportOtherAnim;
+                    public ImportOtherAnim()
+                    {
+                        Type = AnimFileHeaderType.ImportOtherAnim;
+                    }
 
                     /// <summary>
                     /// Gets a clone of this not tied by reference.
                     /// </summary>
-                    public override AnimMiniHeader GetClone()
+                    public override AnimFileHeader GetClone()
                     {
                         var newClone = new ImportOtherAnim();
-
+                        newClone.IsNullHeader = IsNullHeader;
+                        newClone.AnimFileName = AnimFileName;
+                        newClone.Type = Type;
                         newClone.ImportFromAnimID = ImportFromAnimID;
                         newClone.Unknown = Unknown;
 
@@ -167,7 +393,7 @@ namespace SoulsAssetPipeline.Animation
                     }
 
                     /// <summary>
-                    /// ID of animation from which to import motion dat and all events.
+                    /// ID of animation from which to import motion dat and all actions.
                     /// </summary>
                     public int ImportFromAnimID { get; set; } = 0;
 
@@ -220,43 +446,37 @@ namespace SoulsAssetPipeline.Animation
             public long ID { get; set; }
 
             /// <summary>
-            /// Timed events in this animation.
+            /// Actions in this animation.
             /// </summary>
-            public List<Event> Events;
+            public List<Action> Actions;
 
             /// <summary>
-            /// Unknown groups of events.
+            /// Track containing actions. Unused in character files of DES/DS1 but used basically everywhere else.
             /// </summary>
-            public List<EventGroup> EventGroups;
+            public List<ActionTrack> ActionTracks;
 
             /// <summary>
-            /// The mini-header of this animation entry.
+            /// The animation file header of this animation entry.
             /// </summary>
-            public AnimMiniHeader MiniHeader { get; set; } = null;
-
-            /// <summary>
-            /// Unknown.
-            /// </summary>
-            public string AnimFileName { get; set; }
+            public AnimFileHeader Header { get; set; } = null;
 
             /// <summary>
             /// Creates a new empty animation with the specified properties.
             /// </summary>
-            public Animation(long id, AnimMiniHeader miniHeader, string animFileName)
+            public Animation(long id, AnimFileHeader miniHeader)
             {
                 ID = id;
-                MiniHeader = miniHeader;
-                AnimFileName = animFileName;
-                Events = new List<Event>();
-                EventGroups = new List<EventGroup>();
+                Header = miniHeader;
+                Actions = new List<Action>();
+                ActionTracks = new List<ActionTrack>();
             }
 
             internal Animation(BinaryReaderEx br, TAEFormat format,
-                out bool lastEventNeedsParamGen, out long animFileOffset,
-                out long lastEventParamOffset)
+                out bool lastActionNeedsParamGen, out long animFileOffset,
+                out long lastActionParamOffset)
             {
-                lastEventNeedsParamGen = false;
-                lastEventParamOffset = 0;
+                lastActionNeedsParamGen = false;
+                lastActionParamOffset = 0;
                 ID = br.ReadVarint();
                 long offset = br.ReadVarint();
 
@@ -267,18 +487,18 @@ namespace SoulsAssetPipeline.Animation
 
                 br.StepIn(offset);
                 {
-                    int eventCount;
-                    long eventHeadersOffset;
-                    int eventGroupCount;
-                    long eventGroupsOffset;
+                    int actionCount;
+                    long actionHeadersOffset;
+                    int actionTrackCount;
+                    long actionTracksOffset;
                     long timesOffset;
 
                     if (format == TAEFormat.DS1 || format == TAEFormat.DES)
                     {
-                        eventCount = br.ReadInt32();
-                        eventHeadersOffset = br.ReadVarint();
-                        eventGroupCount = br.ReadInt32();
-                        eventGroupsOffset = br.ReadVarint();
+                        actionCount = br.ReadInt32();
+                        actionHeadersOffset = br.ReadVarint();
+                        actionTrackCount = br.ReadInt32();
+                        actionTracksOffset = br.ReadVarint();
                         br.ReadInt32(); // Times count
                         timesOffset = br.ReadVarint(); // Times offset
                         animFileOffset = br.ReadVarint();
@@ -292,47 +512,47 @@ namespace SoulsAssetPipeline.Animation
                     }
                     else if (format == TAEFormat.DESR)
                     {
-                        eventCount = br.ReadInt32();
-                        eventGroupCount = br.ReadInt32();
+                        actionCount = br.ReadInt32();
+                        actionTrackCount = br.ReadInt32();
                         br.ReadInt32(); // Times count
                         br.AssertInt32(0);
-                        eventHeadersOffset = br.ReadVarint();
-                        eventGroupsOffset = br.ReadVarint();
+                        actionHeadersOffset = br.ReadVarint();
+                        actionTracksOffset = br.ReadVarint();
                         timesOffset = br.ReadVarint(); // Times offset
                         animFileOffset = br.ReadVarint();
                     }
                     else
                     {
-                        eventHeadersOffset = br.ReadVarint();
-                        eventGroupsOffset = br.ReadVarint();
+                        actionHeadersOffset = br.ReadVarint();
+                        actionTracksOffset = br.ReadVarint();
                         timesOffset = br.ReadVarint(); // Times offset
                         animFileOffset = br.ReadVarint();
-                        eventCount = br.ReadInt32();
-                        eventGroupCount = br.ReadInt32();
+                        actionCount = br.ReadInt32();
+                        actionTrackCount = br.ReadInt32();
                         br.ReadInt32(); // Times count
                         br.AssertInt32(0);
                     }
 
-                    var eventHeaderOffsets = new List<long>(eventCount);
-                    var eventParameterOffsets = new List<long>(eventCount);
-                    Events = new List<Event>(eventCount);
-                    br.StepIn(eventHeadersOffset);
+                    var actionHeaderOffsets = new List<long>(actionCount);
+                    var actionParameterOffsets = new List<long>(actionCount);
+                    Actions = new List<Action>(actionCount);
+                    br.StepIn(actionHeadersOffset);
                     {
-                        for (int i = 0; i < eventCount; i++)
+                        for (int i = 0; i < actionCount; i++)
                         {
-                            eventHeaderOffsets.Add(br.Position);
-                            Events.Add(Event.Read(br, out long pOffset, format));
-                            eventParameterOffsets.Add(pOffset);
+                            actionHeaderOffsets.Add(br.Position);
+                            Actions.Add(Action.Read(br, out long pOffset, format));
+                            actionParameterOffsets.Add(pOffset);
 
                             if (i > 0)
                             {
-                                //  Go to previous event's parameters
-                                br.StepIn(eventParameterOffsets[i - 1]);
+                                //  Go to previous action's parameters
+                                br.StepIn(actionParameterOffsets[i - 1]);
                                 {
-                                    // Read the space between the previous event's parameter start and the start of this event data.
-                                    long gapBetweenEventParamOffsets = eventParameterOffsets[i] - eventParameterOffsets[i - 1];
-                                    // Subtract to account for the current event's type and offset 
-                                    Events[i - 1].ReadParameters(br, (int)(gapBetweenEventParamOffsets - (br.VarintLong ? 16 : 8)));
+                                    // Read the space between the previous action's parameter start and the start of this action data.
+                                    long gapBetweenActionParamOffsets = actionParameterOffsets[i] - actionParameterOffsets[i - 1];
+                                    // Subtract to account for the current action's type and offset 
+                                    Actions[i - 1].ReadParameters(br, (int)(gapBetweenActionParamOffsets - (br.VarintLong ? 16 : 8)));
                                 }
                                 br.StepOut();
                             }
@@ -340,153 +560,48 @@ namespace SoulsAssetPipeline.Animation
                     }
                     br.StepOut();
 
-                    if (eventCount > 0)
+                    if (actionCount > 0)
                     {
-                        if (eventGroupsOffset == 0)
+                        if (actionTracksOffset == 0)
                         {
-                            lastEventNeedsParamGen = true;
-                            lastEventParamOffset = eventParameterOffsets[eventCount - 1];
+                            lastActionNeedsParamGen = true;
+                            lastActionParamOffset = actionParameterOffsets[actionCount - 1];
                         }
                         else
                         {
-                            // Go to last event's parameters
-                            br.StepIn(eventParameterOffsets[eventCount - 1]);
+                            // Go to last actions's parameters
+                            br.StepIn(actionParameterOffsets[actionCount - 1]);
                             {
-                                // Read the space between the last event's parameter start and the start of the event groups.
-                                Events[eventCount - 1].ReadParameters(br, (int)(eventGroupsOffset - eventParameterOffsets[eventCount - 1]));
+                                // Read the space between the last action's parameter start and the start of the action tracks.
+                                Actions[actionCount - 1].ReadParameters(br, (int)(actionTracksOffset - actionParameterOffsets[actionCount - 1]));
                             }
                             br.StepOut();
                         }
                     }
 
-                    EventGroups = new List<EventGroup>(eventGroupCount);
-                    br.StepIn(eventGroupsOffset);
+                    ActionTracks = new List<ActionTrack>(actionTrackCount);
+                    br.StepIn(actionTracksOffset);
                     {
-                        for (int i = 0; i < eventGroupCount; i++)
-                            EventGroups.Add(new EventGroup(br, eventHeaderOffsets, format));
+                        for (int i = 0; i < actionTrackCount; i++)
+                            ActionTracks.Add(new ActionTrack(br, actionHeaderOffsets, format));
                     }
                     br.StepOut();
 
-                    foreach (var grp in EventGroups)
+                    for (int gi = 0; gi < ActionTracks.Count; gi++)
                     {
-                        foreach (var idx in grp.indices)
+                        foreach (var idx in ActionTracks[gi].indices)
                         {
-                            var ev = Events[idx];
-                            if (ev.Group == null)
-                                ev.Group = grp;
+                            var act = Actions[idx];
+                            if (act.TrackIndex < 0)
+                                act.TrackIndex = gi;
                             else
-                                throw new Exception("TAE Event in multiple groups...");
+                                throw new Exception("TAE Action in multiple tracks...");
                         }
                     }
 
                     br.StepIn(animFileOffset);
                     {
-                        var miniHeaderType = br.ReadEnum32<MiniHeaderType>();
-
-                        if (br.VarintLong)
-                            br.AssertInt32(0);
-
-                        var fileNameOffsetOffset = br.GetNextPaddedOffsetAfterCurrentField(br.VarintSize, format == TAEFormat.DES ? 0x10 : 0);
-
-                        // Offset being read as 32bit int to deal with bad data in the upper 32bits of the offsets in DESR
-                        br.AssertInt32((int)fileNameOffsetOffset);
-                        if (br.VarintLong)
-                            br.ReadInt32();
-
-                        br.Position = fileNameOffsetOffset;
-                        // Offset being read as 32bit int to deal with bad data in the upper 32bits of the offsets in DESR
-                        int animFileNameOffset = br.ReadInt32();
-                        if (br.VarintLong)
-                            br.ReadInt32();
-
-                        //if (AnimFileReference)
-                        //{
-                        //    ReferenceID = br.ReadInt32();
-
-                        //    UnkReferenceFlag1 = br.ReadBoolean();
-                        //    ReferenceIsTAEOnly = br.ReadBoolean();
-                        //    ReferenceIsHKXOnly = br.ReadBoolean();
-                        //    LoopByDefault = br.ReadBoolean();
-                        //}
-                        //else
-                        //{
-                        //    UnkReferenceFlag1 = br.ReadBoolean();
-                        //    ReferenceIsTAEOnly = br.ReadBoolean();
-                        //    ReferenceIsHKXOnly = br.ReadBoolean();
-                        //    LoopByDefault = br.ReadBoolean();
-
-                        //    ReferenceID = br.ReadInt32();
-                        //}
-
-                        if (miniHeaderType == MiniHeaderType.Standard)
-                        {
-                            MiniHeader = new AnimMiniHeader.Standard();
-                        }
-                        else if (miniHeaderType == MiniHeaderType.ImportOtherAnim)
-                        {
-                            MiniHeader = new AnimMiniHeader.ImportOtherAnim();
-                        }
-                        else
-                        {
-                            throw new NotImplementedException($"{nameof(AnimMiniHeader)} type not implemented yet.");
-                        }
-
-                        MiniHeader.ReadInner(br, format);
-
-                        if (!(format == TAEFormat.DES || format == TAEFormat.DS1 || format == TAEFormat.DESR))
-                        {
-                            br.AssertVarint(0);
-                            br.AssertVarint(0);
-                        }
-                        else
-                        {
-                            // Check for end of file for certain DESR files where this struct is the very last thing
-                            // and it does not have the padding in such case
-                            if (br.Position < br.Length)
-                            {
-                                if (format == TAEFormat.DESR)
-                                {
-                                    //br.AssertInt32(0);
-
-                                    //if (MiniHeader.Type == MiniHeaderType.ImportOtherAnim)
-                                    //    br.AssertInt32(0);
-                                }
-                                else
-                                {
-                                    br.AssertVarint(0);
-
-                                    if (MiniHeader.Type == MiniHeaderType.ImportOtherAnim)
-                                        br.AssertVarint(0);
-                                }
-                            }
-                            
-                        }
-
-                        if (animFileNameOffset < br.Length && animFileNameOffset != timesOffset)
-                        {
-                            if (br.GetInt64(animFileNameOffset) != 1)
-                            {
-                                var floatCheck = br.GetSingle(animFileNameOffset);
-                                if (!(floatCheck >= 0.016667f && floatCheck <= 100))
-                                {
-                                    AnimFileName = br.GetUTF16(animFileNameOffset);
-                                }
-                            }
-                        }
-
-                        AnimFileName = AnimFileName ?? "";
-
-                        // When Reference is false, there's always a filename.
-                        // When true, there's usually not, but sometimes there is, and I cannot figure out why.
-                        // Thus, this stupid hack to achieve byte-perfection.
-                        //var animNameCheck = AnimFileName.ToLower();
-                        //if (!(animNameCheck.EndsWith(".hkt") 
-                        //    || (format == TAEFormat.SDT && animNameCheck.EndsWith("hkt")) 
-                        //    || animNameCheck.EndsWith(".hkx") 
-                        //    || animNameCheck.EndsWith(".sib") 
-                        //    || animNameCheck.EndsWith(".hkxwin")))
-                        //    AnimFileName = "";
-
+                        Header = AnimFileHeader.Read(br, format, timesOffset);
                     }
                     br.StepOut();
                 }
@@ -505,19 +620,19 @@ namespace SoulsAssetPipeline.Animation
             {
                 bw.FillVarint($"AnimationOffset{i}", bw.Position);
 
-                EventGroups.Clear();
-                foreach (var ev in Events)
-                {
-                    if (ev.Group != null && !EventGroups.Contains(ev.Group))
-                        EventGroups.Add(ev.Group);
-                }
+                //ActionTracks.Clear();
+                //foreach (var act in Actions)
+                //{
+                //    if (act.Track != null && !ActionTracks.Contains(act.Track))
+                //        ActionTracks.Add(act.Track);
+                //}
 
                 if (format is TAEFormat.DS1 or TAEFormat.DES)
                 {
-                    bw.WriteInt32(Events.Count);
-                    bw.ReserveVarint($"EventHeadersOffset{i}");
-                    bw.WriteInt32(EventGroups.Count);
-                    bw.ReserveVarint($"EventGroupHeadersOffset{i}");
+                    bw.WriteInt32(Actions.Count);
+                    bw.ReserveVarint($"ActionHeadersOffset{i}");
+                    bw.WriteInt32(ActionTracks.Count);
+                    bw.ReserveVarint($"ActionTrackHeadersOffset{i}");
                     bw.ReserveInt32($"TimesCount{i}");
                     bw.ReserveVarint($"TimesOffset{i}");
                     bw.ReserveVarint($"AnimFileOffset{i}");
@@ -528,23 +643,23 @@ namespace SoulsAssetPipeline.Animation
                 }
                 else if (format is TAEFormat.DESR)
                 {
-                    bw.WriteInt32(Events.Count);
-                    bw.WriteInt32(EventGroups.Count);
+                    bw.WriteInt32(Actions.Count);
+                    bw.WriteInt32(ActionTracks.Count);
                     bw.ReserveInt32($"TimesCount{i}");
                     bw.WriteInt32(0);
-                    bw.ReserveVarint($"EventHeadersOffset{i}");
-                    bw.ReserveVarint($"EventGroupHeadersOffset{i}");
+                    bw.ReserveVarint($"ActionHeadersOffset{i}");
+                    bw.ReserveVarint($"ActionTrackHeadersOffset{i}");
                     bw.ReserveVarint($"TimesOffset{i}");
                     bw.ReserveVarint($"AnimFileOffset{i}");
                 }
                 else
                 {
-                    bw.ReserveVarint($"EventHeadersOffset{i}");
-                    bw.ReserveVarint($"EventGroupHeadersOffset{i}");
+                    bw.ReserveVarint($"ActionHeadersOffset{i}");
+                    bw.ReserveVarint($"ActionTrackHeadersOffset{i}");
                     bw.ReserveVarint($"TimesOffset{i}");
                     bw.ReserveVarint($"AnimFileOffset{i}");
-                    bw.WriteInt32(Events.Count);
-                    bw.WriteInt32(EventGroups.Count);
+                    bw.WriteInt32(Actions.Count);
+                    bw.WriteInt32(ActionTracks.Count);
                     bw.ReserveInt32($"TimesCount{i}");
                     bw.WriteInt32(0);
                 }
@@ -553,75 +668,14 @@ namespace SoulsAssetPipeline.Animation
             internal void WriteAnimFile(BinaryWriterEx bw, int i, TAEFormat format)
             {
                 bw.FillVarint($"AnimFileOffset{i}", bw.Position);
-                bw.WriteVarint((int)MiniHeader.Type);
-
-
-                bw.ReserveVarint("AnimFileNameOffsetOffset");
-                if (format is TAEFormat.DES) // Not in DESR
-                    bw.Pad(0x10);
-                bw.FillVarint("AnimFileNameOffsetOffset", bw.Position);
-
-                bw.ReserveVarint("AnimFileNameOffset");
-
-                //if (AnimFileReference)
-                //{
-                //    bw.WriteInt32(ReferenceID);
-
-                //    bw.WriteBoolean(UnkReferenceFlag1);
-                //    bw.WriteBoolean(ReferenceIsTAEOnly);
-                //    bw.WriteBoolean(ReferenceIsHKXOnly);
-                //    bw.WriteBoolean(LoopByDefault);
-                //}
-                //else
-                //{
-                //    bw.WriteBoolean(UnkReferenceFlag1);
-                //    bw.WriteBoolean(ReferenceIsTAEOnly);
-                //    bw.WriteBoolean(ReferenceIsHKXOnly);
-                //    bw.WriteBoolean(LoopByDefault);
-
-                //    bw.WriteInt32(ReferenceID);
-                //}
-
-                MiniHeader.WriteInner(bw, format);
-
-                if (!(format is TAEFormat.DES or TAEFormat.DS1 or TAEFormat.DESR))
-                {
-                    bw.WriteVarint(0);
-                    bw.WriteVarint(0);
-                }
-                else
-                {
-                    if (format is TAEFormat.DESR)
-                    {
-                        bw.WriteInt32(0);
-
-                        if (MiniHeader.Type is MiniHeaderType.ImportOtherAnim)
-                            bw.WriteInt32(0);
-                    }
-                    else
-                    {
-                        bw.WriteVarint(0);
-
-                        if (MiniHeader.Type is MiniHeaderType.ImportOtherAnim)
-                            bw.WriteVarint(0);
-                    }
-                }
-
-                bw.FillVarint("AnimFileNameOffset", bw.Position);
-                if (!string.IsNullOrWhiteSpace(AnimFileName))
-                {
-                    bw.WriteUTF16(AnimFileName, true);
-
-                    if (format is not TAEFormat.DS1)
-                        bw.Pad(0x10);
-                }
+                Header.Write(bw, format);
             }
 
             internal Dictionary<float, long> WriteTimes(BinaryWriterEx bw, int animIndex, TAEFormat format)
             {
                 var times = new SortedSet<float>();
 
-                foreach (Event evt in Events)
+                foreach (Action evt in Actions)
                 {
                     times.Add(evt.StartTime);
                     times.Add(evt.MemeEndTime);
@@ -647,52 +701,52 @@ namespace SoulsAssetPipeline.Animation
                 return timeOffsets;
             }
 
-            internal List<long> WriteEventHeaders(BinaryWriterEx bw, int animIndex, Dictionary<float, long> timeOffsets, TAEFormat format)
+            internal List<long> WriteActionHeaders(BinaryWriterEx bw, int animIndex, Dictionary<float, long> timeOffsets, TAEFormat format)
             {
-                var eventHeaderOffsets = new List<long>(Events.Count);
-                if (Events.Count > 0)
+                var actionHeaderOffsets = new List<long>(Actions.Count);
+                if (Actions.Count > 0)
                 {
-                    bw.FillVarint($"EventHeadersOffset{animIndex}", bw.Position);
-                    for (int i = 0; i < Events.Count; i++)
+                    bw.FillVarint($"ActionHeadersOffset{animIndex}", bw.Position);
+                    for (int i = 0; i < Actions.Count; i++)
                     {
-                        eventHeaderOffsets.Add(bw.Position);
-                        Events[i].WriteHeader(bw, animIndex, i, timeOffsets, format);
+                        actionHeaderOffsets.Add(bw.Position);
+                        Actions[i].WriteHeader(bw, animIndex, i, timeOffsets, format);
                     }
                 }
                 else
                 {
-                    bw.FillVarint($"EventHeadersOffset{animIndex}", 0);
+                    bw.FillVarint($"ActionHeadersOffset{animIndex}", 0);
                 }
-                return eventHeaderOffsets;
+                return actionHeaderOffsets;
             }
 
-            internal void WriteEventData(BinaryWriterEx bw, int i, TAEFormat format)
+            internal void WriteActionData(BinaryWriterEx bw, int i, TAEFormat format)
             {
-                for (int j = 0; j < Events.Count; j++)
-                    Events[j].WriteData(bw, i, j, format);
+                for (int j = 0; j < Actions.Count; j++)
+                    Actions[j].WriteData(bw, i, j, format);
             }
 
-            internal void WriteEventGroupHeaders(BinaryWriterEx bw, int i, TAEFormat format)
+            internal void WriteActionTrackHeaders(BinaryWriterEx bw, int i, TAEFormat format, bool saveWithActionTracksStripped)
             {
-                if (EventGroups.Count > 0)
+                if (ActionTracks.Count > 0 && !saveWithActionTracksStripped)
                 {
-                    bw.FillVarint($"EventGroupHeadersOffset{i}", bw.Position);
-                    for (int j = 0; j < EventGroups.Count; j++)
+                    bw.FillVarint($"ActionTrackHeadersOffset{i}", bw.Position);
+                    for (int j = 0; j < ActionTracks.Count; j++)
                     {
-                        EventGroups[j].indices = Events.Where(ev => ev.Group == EventGroups[j]).Select(ev => Events.IndexOf(ev)).ToList();
-                        EventGroups[j].WriteHeader(bw, i, j, format);
+                        ActionTracks[j].indices = Actions.Where(ev => ev.TrackIndex == j).Select(ev => Actions.IndexOf(ev)).ToList();
+                        ActionTracks[j].WriteHeader(bw, i, j, format);
                     }
                 }
                 else
                 {
-                    bw.FillVarint($"EventGroupHeadersOffset{i}", 0);
+                    bw.FillVarint($"ActionTrackHeadersOffset{i}", 0);
                 }
             }
 
-            internal void WriteEventGroupData(BinaryWriterEx bw, int i, List<long> eventHeaderOffsets, TAEFormat format)
+            internal void WriteActionTrackData(BinaryWriterEx bw, int i, List<long> actionHeaderOffsets, TAEFormat format)
             {
-                for (int j = 0; j < EventGroups.Count; j++)
-                    EventGroups[j].WriteData(bw, i, j, eventHeaderOffsets, format);
+                for (int j = 0; j < ActionTracks.Count; j++)
+                    ActionTracks[j].WriteData(bw, i, j, actionHeaderOffsets, format);
             }
         }
 

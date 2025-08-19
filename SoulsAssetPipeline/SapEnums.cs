@@ -19,5 +19,7 @@ namespace SoulsAssetPipeline
         BB = 1 << 6,
         SDT = 1 << 7,
         ER = 1 << 8,
+        AC6 = 1 << 9,
+        ERNR = 1 << 10,
     }
 }

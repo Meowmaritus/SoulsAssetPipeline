@@ -19,9 +19,9 @@ namespace SoulsAssetPipeline.Animation
             /// Normal
             NORMAL = 0,
             /// Additive (deprecated format)
-            ADDITIVE_DEPRECATED = 1,
+            ADDITIVE_PARENT_SPACE = 1,
             /// Additive
-            ADDITIVE = 2,
+            ADDITIVE_CHILD_SPACE = 2,
         };
 
         public enum AnimationType : uint
@@ -201,6 +201,64 @@ namespace SoulsAssetPipeline.Animation
                 FloatBlockOffsets = new HKArray<HKUInt>(hkx, section, this, br, variation);
                 TransformOffsets = new HKArray<HKUInt>(hkx, section, this, br, variation);
                 FloatOffsets = new HKArray<HKUInt>(hkx, section, this, br, variation);
+                Data = new HKArray<HKByte>(hkx, section, this, br, variation);
+                Endian = br.ReadInt32();
+
+                DataSize = (uint)br.Position - SectionOffset;
+                ResolveDestinations(hkx, section);
+            }
+
+            public override void Write(HKX hkx, HKXSection section, BinaryWriterEx bw, uint sectionBaseOffset, HKXVariation variation)
+            {
+                throw new NotImplementedException();
+            }
+
+            public byte[] GetData()
+            {
+                var bytes = new byte[Data.Size];
+                for (int i = 0; i < Data.Size; i++)
+                {
+                    bytes[i] = Data.GetArrayData().Elements[i].data;
+                }
+                return bytes;
+            }
+        }
+
+        public class HKAQuantizedAnimation : HKXObject
+        {
+            public AnimationType AnimationType;
+
+            public int TransformTrackCount;
+            public int FloatTrackCount;
+            public int FrameCount;
+            public float Duration;
+
+            public HKArray<HKByte> Data;
+
+
+            public int Endian;
+
+            public override void Read(HKX hkx, HKXSection section, BinaryReaderEx br, HKXVariation variation)
+            {
+                SectionOffset = (uint)br.Position;
+
+                AssertPointer(hkx, br);
+
+                if (variation == HKXVariation.HKXBloodBorne)
+                    br.AssertInt32(0);
+                else
+                    AssertPointer(hkx, br);
+
+                AnimationType = br.ReadEnum32<AnimationType>();
+                Duration = br.ReadSingle();
+                TransformTrackCount = br.ReadInt32();
+                FloatTrackCount = br.ReadInt32();
+
+                if (variation == HKXVariation.HKXBloodBorne)
+                    br.Pad(16);
+
+                br.ReadUInt64s(3); // annotations
+
                 Data = new HKArray<HKByte>(hkx, section, this, br, variation);
                 Endian = br.ReadInt32();
 

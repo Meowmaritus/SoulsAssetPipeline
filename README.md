@@ -1,1 +1,1 @@
-# SoulsAssetPipelineDev2
+Uses SoulsFormatsNEXT https://github.com/soulsmods/SoulsFormatsNEXT

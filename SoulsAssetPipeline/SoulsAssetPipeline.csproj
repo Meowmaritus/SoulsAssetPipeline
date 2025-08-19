@@ -52,7 +52,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Havoc\Havoc.csproj" />
-    <ProjectReference Include="..\SoulsFormats\SoulsFormats\SoulsFormats.csproj" />
+    <ProjectReference Include="..\SoulsFormats\SoulsFormats.csproj" />
   </ItemGroup>
 
   <ItemGroup>

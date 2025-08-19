@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using System.Numerics;
 
 using SoulsFormats;
+using static SoulsAssetPipeline.AnimationImporting.ImportedAnimation;
 
 namespace SoulsAssetPipeline.Animation
 {
@@ -278,18 +279,30 @@ namespace SoulsAssetPipeline.Animation
         }
 
         // Algorithm A2.1 The NURBS Book 2nd edition, page 68
-        static int FindKnotSpan(int degree, float value, int cPointsSize, List<byte> knots)
+        static int FindKnotSpan(int degree, float frame, int cPointsSize, List<byte> knots, int frameCount)
         {
-            if (value >= knots[cPointsSize])
+            if (frame < 0)
+            {
+                var loopMult = MathF.Ceiling(Math.Abs(frame) / frameCount);
+                frame += (frameCount) * loopMult;
+
+                // Just in case??
+                if (frame < 0)
+                {
+                    frame += frameCount;
+                }
+            }
+
+            if (frame >= knots[cPointsSize])
                 return cPointsSize - 1;
 
             int low = degree;
             int high = cPointsSize;
             int mid = (low + high) / 2;
 
-            while (value < knots[mid] || value >= knots[mid + 1])
+            while (frame < knots[mid] || frame >= knots[mid + 1])
             {
-                if (value < knots[mid])
+                if (frame < knots[mid])
                     high = mid;
                 else
                     low = mid;
@@ -301,8 +314,20 @@ namespace SoulsAssetPipeline.Animation
         }
 
         //Basis_ITS1, GetPoint_NR1, TIME-EFFICIENT NURBS CURVE EVALUATION ALGORITHMS, pages 64 & 65
-        static float GetSinglePoint(int knotSpanIndex, int degree, float frame, List<byte> knots, List<float> cPoints)
+        static float GetSinglePoint(int knotSpanIndex, int degree, float frame, List<byte> knots, List<float> cPoints, int frameCount)
         {
+            if (frame < 0)
+            {
+                var loopMult = MathF.Ceiling(Math.Abs(frame) / frameCount);
+                frame += (frameCount) * loopMult;
+
+                // Just in case??
+                if (frame < 0)
+                {
+                    frame += frameCount;
+                }
+            }
+
             float[] N = { 1, 0, 0, 0, 0 };
 
             for (int i = 1; i <= degree; i++)
@@ -328,8 +353,20 @@ namespace SoulsAssetPipeline.Animation
         }
 
         //Basis_ITS1, GetPoint_NR1, TIME-EFFICIENT NURBS CURVE EVALUATION ALGORITHMS, pages 64 & 65
-        static Quaternion GetSinglePoint(int knotSpanIndex, int degree, float frame, List<byte> knots, List<Quaternion> cPoints)
+        static Quaternion GetSinglePoint(int knotSpanIndex, int degree, float frame, List<byte> knots, List<Quaternion> cPoints, int frameCount)
         {
+            if (frame < 0)
+            {
+                var loopMult = MathF.Ceiling(Math.Abs(frame) / frameCount);
+                frame += (frameCount) * loopMult;
+
+                // Just in case??
+                if (frame < 0)
+                {
+                    frame += frameCount;
+                }
+            }
+
             float[] N = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 
             for (int i = 1; i <= degree; i++)
@@ -398,10 +435,10 @@ namespace SoulsAssetPipeline.Animation
                 }
             }
 
-            public Quaternion GetValue(float frame)
+            public Quaternion GetValue(float frame, int frameCount)
             {
-                int knotspan = FindKnotSpan(Degree, frame, Channel.Values.Count, Knots);
-                return GetSinglePoint(knotspan, Degree, frame, Knots, Channel.Values);
+                int knotspan = FindKnotSpan(Degree, frame, Channel.Values.Count, Knots, frameCount);
+                return GetSinglePoint(knotspan, Degree, frame, Knots, Channel.Values, frameCount);
             }
         }
 
@@ -413,7 +450,8 @@ namespace SoulsAssetPipeline.Animation
             public List<byte> Knots = new List<byte>();
             public byte Degree;
 
-            internal SplineTrackVector3(BinaryReaderEx br, List<FlagOffset> channelTypes, ScalarQuantizationType quantizationType, bool isPosition)
+            internal SplineTrackVector3(BinaryReaderEx br, List<FlagOffset> channelTypes, 
+                ScalarQuantizationType quantizationType, bool isPosition, int debug_trackIndex)
             {
                 long debug_StartOfThisSplineTrack = br.Position;
 
@@ -442,6 +480,11 @@ namespace SoulsAssetPipeline.Animation
                 {
                     BoundsXMin = br.ReadSingle();
                     BoundsXMax = br.ReadSingle();
+                    if (float.IsNaN(BoundsXMin))
+                    {
+                        var test = br.GetBytes(br.Position - 4, 4);
+                        Console.WriteLine("wtf");
+                    }
                 }
                 else if (channelTypes.Contains(FlagOffset.StaticX))
                 {
@@ -502,37 +545,37 @@ namespace SoulsAssetPipeline.Animation
                 }
             }
 
-            public float? GetValueX(float frame)
+            public float? GetValueX(float frame, int frameCount)
             {
                 if (ChannelX == null)
                     return null;
 
                 if (ChannelX.Values.Count == 1)
                     return ChannelX.Values[0];
-                int knotspan = FindKnotSpan(Degree, frame, ChannelX.Values.Count, Knots);
-                return GetSinglePoint(knotspan, Degree, frame, Knots, ChannelX.Values);
+                int knotspan = FindKnotSpan(Degree, frame, ChannelX.Values.Count, Knots, frameCount);
+                return GetSinglePoint(knotspan, Degree, frame, Knots, ChannelX.Values, frameCount);
             }
 
-            public float? GetValueY(float frame)
+            public float? GetValueY(float frame, int frameCount)
             {
                 if (ChannelY == null)
                     return null;
 
                 if (ChannelY.Values.Count == 1)
                     return ChannelY.Values[0];
-                int knotspan = FindKnotSpan(Degree, frame, ChannelY.Values.Count, Knots);
-                return GetSinglePoint(knotspan, Degree, frame, Knots, ChannelY.Values);
+                int knotspan = FindKnotSpan(Degree, frame, ChannelY.Values.Count, Knots, frameCount);
+                return GetSinglePoint(knotspan, Degree, frame, Knots, ChannelY.Values, frameCount);
             }
 
-            public float? GetValueZ(float frame)
+            public float? GetValueZ(float frame, int frameCount)
             {
                 if (ChannelZ == null)
                     return null;
 
                 if (ChannelZ.Values.Count == 1)
                     return ChannelZ.Values[0];
-                int knotspan = FindKnotSpan(Degree, frame, ChannelZ.Values.Count, Knots);
-                return GetSinglePoint(knotspan, Degree, frame, Knots, ChannelZ.Values);
+                int knotspan = FindKnotSpan(Degree, frame, ChannelZ.Values.Count, Knots, frameCount);
+                return GetSinglePoint(knotspan, Degree, frame, Knots, ChannelZ.Values, frameCount);
             }
         }
 
@@ -599,7 +642,7 @@ namespace SoulsAssetPipeline.Animation
             var tracks = ReadSplineCompressedAnimByteBlock(
                 isBigEndian: false, animationData, numTransformTracks, numBlocks);
 
-            NewBlendableTransform GetTransformOnSpecificBlockAndFrame(int transformIndex, int block, float frame)
+            NewBlendableTransform GetTransformOnSpecificBlockAndFrame(int transformIndex, int block, float frame, int frameCount)
             {
                 frame = (frame % numFrames) % numFramesPerBlock;
 
@@ -615,11 +658,11 @@ namespace SoulsAssetPipeline.Animation
 
                 if (track.SplineScale != null)
                 {
-                    result.Scale.X = track.SplineScale.GetValueX(frame) ?? 1;
+                    result.Scale.X = track.SplineScale.GetValueX(frame, frameCount) ?? 1;
 
-                    result.Scale.Y = track.SplineScale.GetValueY(frame) ?? 1;
+                    result.Scale.Y = track.SplineScale.GetValueY(frame, frameCount) ?? 1;
 
-                    result.Scale.Z = track.SplineScale.GetValueZ(frame) ?? 1;
+                    result.Scale.Z = track.SplineScale.GetValueZ(frame, frameCount) ?? 1;
                 }
                 else
                 {
@@ -641,7 +684,7 @@ namespace SoulsAssetPipeline.Animation
 
                 if (track.SplineRotation != null)//track.HasSplineRotation)
                 {
-                    result.Rotation = track.SplineRotation.GetValue(frame);
+                    result.Rotation = track.SplineRotation.GetValue(frame, frameCount);
                 }
                 else if (track.HasStaticRotation)
                 {
@@ -659,11 +702,11 @@ namespace SoulsAssetPipeline.Animation
 
                 if (track.SplinePosition != null)
                 {
-                    result.Translation.X = track.SplinePosition.GetValueX(frame) ?? 0;
+                    result.Translation.X = track.SplinePosition.GetValueX(frame, frameCount) ?? 0;
 
-                    result.Translation.Y = track.SplinePosition.GetValueY(frame) ?? 0;
+                    result.Translation.Y = track.SplinePosition.GetValueY(frame, frameCount) ?? 0;
 
-                    result.Translation.Z = track.SplinePosition.GetValueZ(frame) ?? 0;
+                    result.Translation.Z = track.SplinePosition.GetValueZ(frame, frameCount) ?? 0;
                 }
                 else
                 {
@@ -699,8 +742,8 @@ namespace SoulsAssetPipeline.Animation
                     if (frame >= numFrames - 1)
                     {
                         NewBlendableTransform currentFrame = GetTransformOnSpecificBlockAndFrame(t,
-                            block: currentBlock, frame: (float)Math.Floor(frame));
-                        NewBlendableTransform nextFrame = GetTransformOnSpecificBlockAndFrame(t, block: 0, frame: 0);
+                            block: currentBlock, frame: (float)Math.Floor(frame), numFrames);
+                        NewBlendableTransform nextFrame = GetTransformOnSpecificBlockAndFrame(t, block: 0, frame: 0, numFrames);
                         currentFrame = NewBlendableTransform.Lerp(currentFrame, nextFrame, frame % 1);
                         resultList.Add(currentFrame);
                     }
@@ -708,7 +751,7 @@ namespace SoulsAssetPipeline.Animation
                     else
                     {
                         NewBlendableTransform currentFrame = GetTransformOnSpecificBlockAndFrame(t,
-                            block: currentBlock, frame);
+                            block: currentBlock, frame, numFrames);
                         resultList.Add(currentFrame);
                     }
                 }
@@ -765,7 +808,7 @@ namespace SoulsAssetPipeline.Animation
 
                     if (track.HasSplinePosition)
                     {
-                        track.SplinePosition = new SplineTrackVector3(br, m.PositionTypes, m.PositionQuantizationType, isPosition: true);
+                        track.SplinePosition = new SplineTrackVector3(br, m.PositionTypes, m.PositionQuantizationType, isPosition: true, i);
                     }
                     else
                     {
@@ -806,13 +849,17 @@ namespace SoulsAssetPipeline.Animation
 
                     if (track.HasSplineScale)
                     {
-                        track.SplineScale = new SplineTrackVector3(br, m.ScaleTypes, m.ScaleQuantizationType, isPosition: false);
+                        track.SplineScale = new SplineTrackVector3(br, m.ScaleTypes, m.ScaleQuantizationType, isPosition: false, i);
                     }
                     else
                     {
                         if (m.ScaleTypes.Contains(FlagOffset.StaticX))
                         {
                             track.StaticScale.X = br.ReadSingle();
+                            if (float.IsNaN(track.StaticScale.X))
+                            {
+                                Console.WriteLine("nan bone scale");
+                            }
                         }
 
                         if (m.ScaleTypes.Contains(FlagOffset.StaticY))

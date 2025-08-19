@@ -21,23 +21,27 @@ namespace SoulsAssetPipeline.Audio.Wwise
             {
                 public enum ObjTypes : byte
                 {
-                    CAkState = 1,
+                    _CAkState = 1, // Unmapped
                     CAkSound = 2,
                     CAkAction = 3,
                     CAkEvent = 4,
                     CAkRanSeqCntr = 5,
                     CAkSwitchCntr = 6,
-                    CAkActorMixer = 7,
-                    CAkBus = 8,
+                    _CAkActorMixer = 7, // Unmapped
+                    _CAkBus = 8, // Unmapped
                     CAkLayerCntr = 9,
-                    Unk10 = 10,
-                    Unk11 = 11,
-                    Unk12 = 12,
-                    Unk13 = 13,
-                    CAkAttenuation = 14,
+                    _CAkMusicSegment = 10, // Unmapped
+                    _CAkMusicTrack = 11, // Unmapped
+                    _CAkMusicSwitchCntr = 12, // Unmapped
+                    _CAkMusicRanSeqCntr = 13, // Unmapped
+                    _CAkAttenuation = 14, // Unmapped
                     CAkDialogueEvent = 15,
-                    CAkFxCustom = 17,
-                    CAkAuxBus = 18,
+                    _CAkFxCustom = 17, // Unmapped
+                    _CAkAuxBus = 18, // Unmapped
+                    _UnkType19 = 19, // Unmapped
+                    _UnkType20 = 20, // Unmapped
+                    _CAkAudioDevice = 21, // Unmapped
+                    _CAkTimeModulator = 22, // Unmapped
                 }
                 public ObjTypes ObjectType;
                 public int HircOffset;
@@ -51,53 +55,60 @@ namespace SoulsAssetPipeline.Audio.Wwise
             private Dictionary<uint, IWwiseObject> loadedObjects = new Dictionary<uint, IWwiseObject>();
             public IReadOnlyDictionary<uint, IWwiseObject> LoadedObjects => loadedObjects;
 
+            private object _lock_LoadObjectDynamic = new object();
+
             public IWwiseObject LoadObjectDynamic(uint id)
             {
-                if (loadedObjects.ContainsKey(id))
+                IWwiseObject result = null;
+                lock (_lock_LoadObjectDynamic)
                 {
-                    return loadedObjects[id];
-                }
-                else
-                {
-                    if (!wwObjectInfos.ContainsKey(id))
-                        return null;
-                    var info = wwObjectInfos[id];
-
-                    IWwiseObject t = null;
-
-                    switch (info.ObjectType)
+                    if (loadedObjects.ContainsKey(id))
                     {
-                        case WwiseObjectInfo.ObjTypes.CAkAction:
-                            t = new WwiseObject.CAkAction();
-                            break;
-                        case WwiseObjectInfo.ObjTypes.CAkEvent:
-                            t = new WwiseObject.CAkEvent();
-                            break;
-                        case WwiseObjectInfo.ObjTypes.CAkRanSeqCntr:
-                            t = new WwiseObject.CAkRanSeqCntr();
-                            break;
-                        case WwiseObjectInfo.ObjTypes.CAkSound:
-                            t = new WwiseObject.CAkSound();
-                            break;
-                        case WwiseObjectInfo.ObjTypes.CAkSwitchCntr:
-                            t = new WwiseObject.CAkSwitchCntr();
-                            break;
-                        case WwiseObjectInfo.ObjTypes.CAkLayerCntr:
-                            t = new WwiseObject.CAkLayerCntr();
-                            break;
-                        case WwiseObjectInfo.ObjTypes.CAkDialogueEvent:
-                            t = new WwiseObject.CAkDialogueEvent();
-                            break;
-                        default:
-                            throw new NotImplementedException();
+                        result = loadedObjects[id];
                     }
+                    else
+                    {
+                        if (!wwObjectInfos.ContainsKey(id))
+                            return null;
+                        var info = wwObjectInfos[id];
 
-                    objFetchBinaryReader.StepIn(info.HircOffset);
-                    objFetchBinaryReader.AssertUInt32(id);
-                    t.Read(objFetchBinaryReader, null);
-                    loadedObjects.Add(id, t);
-                    return t;
+                        IWwiseObject t = null;
+
+                        switch (info.ObjectType)
+                        {
+                            case WwiseObjectInfo.ObjTypes.CAkAction:
+                                t = new WwiseObject.CAkAction();
+                                break;
+                            case WwiseObjectInfo.ObjTypes.CAkEvent:
+                                t = new WwiseObject.CAkEvent();
+                                break;
+                            case WwiseObjectInfo.ObjTypes.CAkRanSeqCntr:
+                                t = new WwiseObject.CAkRanSeqCntr();
+                                break;
+                            case WwiseObjectInfo.ObjTypes.CAkSound:
+                                t = new WwiseObject.CAkSound();
+                                break;
+                            case WwiseObjectInfo.ObjTypes.CAkSwitchCntr:
+                                t = new WwiseObject.CAkSwitchCntr();
+                                break;
+                            case WwiseObjectInfo.ObjTypes.CAkLayerCntr:
+                                t = new WwiseObject.CAkLayerCntr();
+                                break;
+                            case WwiseObjectInfo.ObjTypes.CAkDialogueEvent:
+                                t = new WwiseObject.CAkDialogueEvent();
+                                break;
+                            default:
+                                throw new NotImplementedException();
+                        }
+
+                        objFetchBinaryReader.StepIn(info.HircOffset);
+                        objFetchBinaryReader.AssertUInt32(id);
+                        t.Read(objFetchBinaryReader, null);
+                        loadedObjects[id] = t;
+                        result = t;
+                    }
                 }
+                return result;
             }
 
             public T LoadObject<T>(uint id)
