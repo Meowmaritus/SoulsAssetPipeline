@@ -164,7 +164,7 @@ namespace SoulsAssetPipeline.FLVERImporting
             {
                 // Mark as dummied-out bone until iterating over them later and seeing which are weighted to meshes.
                 if (b.ParentIndex == -1)
-                    b.Flags = FLVER.Node.NodeFlags.DummyOwner;
+                    b.Flags = FLVER.Node.NodeFlags.Disabled;
             }
 
             var usesIndirectBones = flver.Header.Version <= 0x20010;
@@ -326,7 +326,7 @@ namespace SoulsAssetPipeline.FLVERImporting
                     NextSiblingIndex = -1,
                     ParentIndex = -1,
                     FirstChildIndex = -1,
-                    Flags = FLVER.Node.NodeFlags.DummyOwner,
+                    Flags = FLVER.Node.NodeFlags.Disabled,
                 });
 
 
