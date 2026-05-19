@@ -81,7 +81,7 @@ namespace SoulsFormats
             /// <summary>
             /// Creates a <see cref="LayoutMember"/> with the specified values.
             /// </summary>
-            public LayoutMember(LayoutType type, LayoutSemantic semantic, int index = 0, short stream = 0, short specialModifier = 0)
+            public LayoutMember(LayoutType type, LayoutSemantic semantic, int index = 0, int stream = 0, short specialModifier = 0)
             {
                 Stream = stream;
                 SpecialModifier = specialModifier;
@@ -107,13 +107,15 @@ namespace SoulsFormats
                 {
                     Stream = br.ReadInt16();
                     SpecialModifier = br.ReadInt16();
+                    //Not always struct offset in speedtree...
+                    var localStructOffset = br.ReadInt32();
                 }
                 else
                 {
                     Stream = br.ReadInt32();
+                    br.AssertInt32(structOffset);
                 }
 
-                br.AssertInt32(structOffset);
                 Type = br.ReadEnum32<LayoutType>();
                 Semantic = br.ReadEnum32<LayoutSemantic>();
                 Index = br.ReadInt32();

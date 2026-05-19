@@ -22,26 +22,26 @@ namespace SoulsFormats
         /// <summary>
         /// Type of compression used, if any.
         /// </summary>
-        public DCX.Type Compression { get; set; }
+        public DCX.CompressionInfo Compression { get; set; }
+
+        /// <summary>
+        /// Creates a new <see cref="BND3Reader"/> from the specified <see cref="BinaryReaderEx"/>.
+        /// </summary>
+        /// <param name="br">The reader.</param>
+        private BND3Reader(BinaryReaderEx br)
+        {
+            Read(br);
+        }
 
         /// <summary>
         /// Reads a BND3 from the given path, decompressing if necessary.
         /// </summary>
-        public BND3Reader(string path)
-        {
-            FileStream fs = File.OpenRead(path);
-            var br = new BinaryReaderEx(false, fs);
-            Read(br);
-        }
+        public BND3Reader(string path) : this(new BinaryReaderEx(false, File.OpenRead(path))) { }
 
         /// <summary>
         /// Reads a BND3 from the given bytes, decompressing if necessary.
         /// </summary>
-        public BND3Reader(byte[] bytes)
-        {
-            var br = new BinaryReaderEx(false, bytes);
-            Read(br);
-        }
+        public BND3Reader(byte[] bytes) : this(new BinaryReaderEx(false, bytes)) { }
 
         /// <summary>
         /// Reads a BND3 from the given <see cref="Stream"/>, decompressing if necessary.
@@ -58,9 +58,77 @@ namespace SoulsFormats
             Read(br);
         }
 
+        /// <summary>
+        /// Reads a BND3 from the given path, decompressing if necessary.
+        /// </summary>
+        public static BND3Reader Read(string path)
+            => new BND3Reader(path);
+
+        /// <summary>
+        /// Reads a BND3 from the given bytes, decompressing if necessary.
+        /// </summary>
+        public static BND3Reader Read(byte[] bytes)
+            => new BND3Reader(bytes);
+
+        /// <summary>
+        /// Reads a BND3 from the given <see cref="Stream"/>, decompressing if necessary.
+        /// </summary>
+        public static BND3Reader Read(Stream stream)
+            => new BND3Reader(stream);
+
+        /// <summary>
+        /// Returns whether the file appears to be a file of this type and reads it if so.
+        /// </summary>
+        private static bool IsRead(BinaryReaderEx br, out BND3Reader reader)
+        {
+            if (BND3.IsFormat(br))
+            {
+                reader = new BND3Reader(br);
+                return true;
+            }
+
+            br.Dispose();
+            reader = null;
+            return false;
+        }
+
+        /// <summary>
+        /// Returns whether the file appears to be a file of this type and reads it if so.
+        /// </summary>
+        public static bool IsRead(string path, out BND3Reader reader)
+        {
+            FileStream fs = File.OpenRead(path);
+            var br = new BinaryReaderEx(false, fs);
+            return IsRead(br, out reader);
+        }
+
+        /// <summary>
+        /// Returns whether the bytes appear to be a file of this type and reads it if so.
+        /// </summary>
+        public static bool IsRead(byte[] bytes, out BND3Reader reader)
+        {
+            var br = new BinaryReaderEx(false, bytes);
+            return IsRead(br, out reader);
+        }
+
+        /// <summary>
+        /// Returns whether the stream appears to be a file of this type and reads it if so.
+        /// </summary>
+        public static bool IsRead(Stream stream, out BND3Reader reader)
+        {
+            if (stream.Position != 0)
+            {
+                // Cannot ensure offset jumping for every format will work otherwise
+                throw new InvalidOperationException($"Cannot safely read if stream is not at position {0}.");
+            }
+
+            var br = new BinaryReaderEx(false, stream, true);
+            return IsRead(br, out reader);
+        }
+
         private void Read(BinaryReaderEx br)
         {
-            br = SFUtil.GetDecompressedBinaryReader(br, out DCX.Type compression);
+            br = SFUtil.GetDecompressedBinaryReader(br, out DCX.CompressionInfo compression);
             Compression = compression;
             Files = BND3.ReadHeader(this, br);
             DataBR = br;

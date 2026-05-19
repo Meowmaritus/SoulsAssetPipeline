@@ -14,36 +14,38 @@ namespace SoulsFormats
     public class ANI : SoulsFile<ANI>
     {
         /// <summary>
-        /// Bones in the animation.
+        /// A collection of <see cref="Node"/> objects for animation.
         /// </summary>
-        public List<Bone> Bones { get; set; }
+        public List<Node> Nodes { get; set; }
 
         /// <summary>
-        /// The positions of each bone for every frame.
+        /// The translation buffer for animation.
         /// </summary>
-        public List<Vector3> Positions { get; set; }
+        public List<Vector3> Translations { get; set; }
 
         /// <summary>
-        /// The rotations of each bone for every frame.
+        /// The rotation buffer for animation.
         /// </summary>
         public List<Vector3> Rotations { get; set; }
 
         /// <summary>
-        /// Deserializes file data from a stream.
+        /// Reads an <see cref="ANI"/> from a stream.
         /// </summary>
+        /// <param name="br">The stream reader.</param>
+        /// <exception cref="InvalidDataException">The data was not large enough.</exception>
         protected override void Read(BinaryReaderEx br)
         {
             br.BigEndian = true;
             br.AssertInt32(0x20051014);
             br.AssertInt32(0);
             br.ReadInt32(); // Frame Count
-            int bonesOffset = br.ReadInt32();
-            int boneCount = br.ReadInt32();
-            int positionsOffset = br.ReadInt32();
+            int nodesOffset = br.ReadInt32();
+            int nodeCount = br.ReadInt32();
+            int translationsOffset = br.ReadInt32();
             int rotationsOffset = br.ReadInt32();
-            int positionCount = br.ReadInt32();
+            int translationCount = br.ReadInt32();
             int rotationCount = br.ReadInt32();
-            int dataSize = br.ReadInt32();
+            int dataSize = br.ReadInt32(); // Scales Offset?
 
             if (!(dataSize == br.Length || dataSize < br.Length))
                 throw new InvalidDataException("Data size value was greater than stream size.");
@@ -62,69 +64,74 @@ namespace SoulsFormats
             br.AssertByte(1);
             br.AssertPattern(70, 0);
 
-            Positions = new List<Vector3>(positionCount);
+            Translations = new List<Vector3>(translationCount);
             Rotations = new List<Vector3>(rotationCount);
-            Bones = new List<Bone>(boneCount);
+            Nodes = new List<Node>(nodeCount);
 
-            br.StepIn(positionsOffset);
-            for (int i = 0; i < positionCount; i++)
-                Positions.Add(br.ReadVector3());
+            br.StepIn(translationsOffset);
+            for (int translationIndex = 0; translationIndex < translationCount; translationIndex++)
+                Translations.Add(br.ReadVector3());
             br.StepOut();
 
             br.StepIn(rotationsOffset);
-            for (int i = 0; i < rotationCount; i++)
+            for (int rotationIndex = 0; rotationIndex < rotationCount; rotationIndex++)
                 Rotations.Add(ReadVector3Short(br));
             br.StepOut();
 
-            br.StepIn(bonesOffset);
-            for (int i = 0; i < boneCount; i++)
-                Bones.Add(new Bone(br));
+            br.StepIn(nodesOffset);
+            for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
+                Nodes.Add(new Node(br, nodeIndex));
             br.StepOut();
         }
 
         /// <summary>
-        /// Serializes file data to a stream.
+        /// Writes this <see cref="ANI"/> to a stream.
         /// </summary>
+        /// <param name="bw">The stream writer.</param>
         protected override void Write(BinaryWriterEx bw)
         {
             bw.BigEndian = true;
             bw.WriteInt32(0x20051014);
             bw.WriteInt32(0);
             bw.WriteInt32(GetKeyFrameCount());
-            bw.WriteInt32(120); // AnimEntryOffset
-            bw.WriteInt32(Bones.Count);
-            bw.ReserveInt32("PositionsOffset");
+            bw.WriteInt32(120); // NodeOffset
+            bw.WriteInt32(Nodes.Count);
+            bw.ReserveInt32("TranslationsOffset");
             bw.ReserveInt32("RotationsOffset");
-            bw.WriteInt32(Positions.Count);
+            bw.WriteInt32(Translations.Count);
             bw.WriteInt32(Rotations.Count);
-            bw.ReserveInt32("DataSize");
+            bw.ReserveInt32("DataSize"); // Scales Offset?
             bw.WriteInt32(0);
             bw.WriteInt32(1);
             bw.WriteByte(1);
             bw.WriteByte(1);
             bw.WritePattern(70, 0);
 
-            for (int i = 0; i < Bones.Count; i++)
-                Bones[i].Write(bw, i);
+            for (int nodeIndex = 0; nodeIndex < Nodes.Count; nodeIndex++)
+                Nodes[nodeIndex].Write(bw, nodeIndex);
 
-            for (int i = 0; i < Bones.Count; i++)
+            for (int nodeIndex = 0; nodeIndex < Nodes.Count; nodeIndex++)
             {
-                bw.FillInt32($"BoneNameOffset_{i}", (int)bw.Position);
-                bw.WriteShiftJIS(Bones[i].Name, true);
-                if (Bones[i].Frames != null)
+                bw.FillInt32($"NodeNameOffset_{nodeIndex}", (int)bw.Position);
+                bw.WriteShiftJIS(Nodes[nodeIndex].Name, true);
+                if (Nodes[nodeIndex].Animation != null)
                 {
-                    bw.FillInt32($"AnimationOffset_{i}", (int)bw.Position);
-                    Bones[i].Frames.Write(bw);
+                    bw.FillInt32($"AnimationOffset_{nodeIndex}", (int)bw.Position);
+                    Nodes[nodeIndex].Animation.Write(bw);
                 }
             }
 
-            bw.FillInt32("PositionsOffset", (int)bw.Position);
-            foreach (var position in Positions)
-                bw.WriteVector3(position);
+            bw.FillInt32("TranslationsOffset", (int)bw.Position);
+            foreach (var translation in Translations)
+                bw.WriteVector3(translation);
             bw.FillInt32("RotationsOffset", (int)bw.Position);
             foreach (var rotation in Rotations)
                 WriteVector3Short(bw, rotation);
-            bw.FillInt32("DataSize", (int)bw.Position);
+
+            bw.Pad(4);
+            bw.FillInt32("DataSize", (int)bw.Position); // Scales Offset?
+
+            bw.Pad(16);
         }
 
         /// <summary>
@@ -140,25 +147,25 @@ namespace SoulsFormats
         }
 
         /// <summary>
-        /// Reads three shorts which are divided by 1000.0f into floats to get a Vector3.
+        /// Reads three shorts which are divided by 1000.0f into floats to get a <see cref="Vector3"/>.
         /// </summary>
-        /// <param name="br">A BinaryReaderEx.</param>
-        /// <returns>A Vector3.</returns>
-        private Vector3 ReadVector3Short(BinaryReaderEx br)
+        /// <param name="br">The stream reader.</param>
+        /// <returns>A <see cref="Vector3"/>.</returns>
+        private static Vector3 ReadVector3Short(BinaryReaderEx br)
         {
             return new Vector3(br.ReadInt16() / 1000.0f, br.ReadInt16() / 1000.0f, br.ReadInt16() / 1000.0f);
         }
 
         /// <summary>
-        /// Write a Vector3 into 3 shorts by multipying its coordinates by 1000.
+        /// Write a <see cref="Vector3"/> into 3 shorts by multipying its coordinates by 1000.
         /// </summary>
-        /// <param name="bw">A BinaryWriterEx.</param>
-        /// <param name="vector">The Vector3 to write.</param>
-        private void WriteVector3Short(BinaryWriterEx bw, Vector3 vector)
+        /// <param name="bw">The stream writer.</param>
+        /// <param name="value">The value to write.</param>
+        private static void WriteVector3Short(BinaryWriterEx bw, Vector3 value)
         {
-            bw.WriteInt16((short)(vector.X * 1000));
-            bw.WriteInt16((short)(vector.Y * 1000));
-            bw.WriteInt16((short)(vector.Z * 1000));
+            bw.WriteInt16((short)(value.X * 1000));
+            bw.WriteInt16((short)(value.Y * 1000));
+            bw.WriteInt16((short)(value.Z * 1000));
         }
 
         /// <summary>
@@ -168,11 +175,11 @@ namespace SoulsFormats
         public int GetKeyFrameCount()
         {
             int value = 0;
-            foreach (var entry in Bones)
+            foreach (var node in Nodes)
             {
-                if (entry.Frames != null)
+                if (node.Animation != null)
                 {
-                    foreach (var frame in entry.Frames.Frames)
+                    foreach (var frame in node.Animation.Frames)
                     {
                         if (frame.KeyFrame > value)
                         {
@@ -187,33 +194,28 @@ namespace SoulsFormats
         /// <summary>
         /// A bone and information regarding where it is each frame.
         /// </summary>
-        public class Bone
+        public class Node
         {
             /// <summary>
-            /// The different object types.
+            /// The different <see cref="Node"/> types.
             /// </summary>
-            public enum ObjectType : int
+            public enum NodeType : int
             {
                 /// <summary>
-                /// The object is defined in a model.
+                /// The <see cref="Node"/> is intended as geometry.
                 /// </summary>
                 Geom = 1,
 
                 /// <summary>
-                /// The object is only defined in an animation.
+                /// The <see cref="Node"/> is intended to connect geometry.
                 /// </summary>
                 Dummy = 2
             }
 
             /// <summary>
-            /// The object type.
+            /// The <see cref="Node"/> type.
             /// </summary>
-            public ObjectType Type { get; set; }
-
-            /// <summary>
-            /// The index of this entry.
-            /// </summary>
-            public short BoneIndex { get; set; }
+            public NodeType Type { get; set; }
 
             /// <summary>
             /// The geometry index of this entry.
@@ -221,17 +223,17 @@ namespace SoulsFormats
             public short GeomIndex { get; set; }
 
             /// <summary>
-            /// The index of the parent entry.
+            /// The index of the parent.
             /// </summary>
             public short ParentIndex { get; set; }
 
             /// <summary>
-            /// The index of the child entry.
+            /// The index of the first child.
             /// </summary>
-            public short ChildIndex { get; set; }
+            public short FirstChildIndex { get; set; }
 
             /// <summary>
-            /// The index of the next sibling entry.
+            /// The index of the next sibling.
             /// </summary>
             public short NextSiblingIndex { get; set; }
 
@@ -241,41 +243,40 @@ namespace SoulsFormats
             public short UnkIndex12 { get; set; }
 
             /// <summary>
-            /// Where the bone will be moved when animating.
+            /// The <see cref="Node"/> translation.
             /// </summary>
             public Vector3 Translation { get; set; }
 
             /// <summary>
-            /// How the bone will rotate when animating.
+            /// The <see cref="Node"/> rotation.
             /// </summary>
             public Vector3 Rotation { get; set; }
 
             /// <summary>
-            /// The size the bone will be when animating.
+            /// The <see cref="Node"/> scale.
             /// </summary>
             public Vector3 Scale { get; set; }
 
             /// <summary>
-            /// The name of the bone.
+            /// The name of the <see cref="Node"/>.
             /// </summary>
             public string Name { get; set; }
 
             /// <summary>
-            /// Information about frames for this bone.<br/>
+            /// Information about frames for this <see cref="Node"/>.<br/>
             /// Null when there is none.
             /// </summary>
-            public Animation Frames { get; set; }
+            public NodeAnimation Animation { get; set; }
 
             /// <summary>
-            /// Create a new <see cref="Bone"/>.
+            /// Create a new <see cref="Node"/>.
             /// </summary>
-            public Bone()
+            public Node()
             {
-                Type = ObjectType.Geom;
-                BoneIndex = -1;
+                Type = NodeType.Geom;
                 GeomIndex = -1;
                 ParentIndex = -1;
-                ChildIndex = -1;
+                FirstChildIndex = -1;
                 NextSiblingIndex = -1;
                 UnkIndex12 = -1;
                 Translation = Vector3.Zero;
@@ -285,77 +286,85 @@ namespace SoulsFormats
             }
 
             /// <summary>
-            /// Deserializes a <see cref="Bone"/> from a stream.
+            /// Read this <see cref="Node"/> from a stream.
             /// </summary>
-            internal Bone(BinaryReaderEx br)
+            /// <param name="br">The stream reader,</param>
+            /// <param name="nodeIndex">The index of the <see cref="Node"/>.</param>
+            /// <exception cref="InvalidDataException">The <see cref="Node"/> had no name.</exception>
+            internal Node(BinaryReaderEx br, int nodeIndex)
             {
-                int boneNameOffset = br.ReadInt32();
+                int nodeNameOffset = br.ReadInt32();
+                if (nodeNameOffset < 1)
+                    throw new InvalidDataException($"{nameof(Node)} must have a name.");
 
-                if (boneNameOffset < 1)
-                    throw new InvalidDataException("Entry must have a bone name.");
-
-                Name = br.GetShiftJIS(boneNameOffset);
-                Type = br.ReadEnum32<ObjectType>();
-                BoneIndex = br.ReadInt16();
+                Name = br.GetShiftJIS(nodeNameOffset);
+                Type = br.ReadEnum32<NodeType>();
+                br.AssertInt16((short)nodeIndex);
                 GeomIndex = br.ReadInt16();
                 ParentIndex = br.ReadInt16();
-                ChildIndex = br.ReadInt16();
+                FirstChildIndex = br.ReadInt16();
                 NextSiblingIndex = br.ReadInt16();
                 UnkIndex12 = br.ReadInt16();
                 Translation = br.ReadVector3();
                 Rotation = br.ReadVector3();
                 Scale = br.ReadVector3();
-                int animDataOffset = br.ReadInt32();
-                br.AssertPattern(184, 0);
+                int animationOffset = br.ReadInt32();
+                br.AssertPattern(4, 0);
+                br.ReadInt32(); // Unknown data offset
+                br.AssertPattern(176, 0);
 
-                if (animDataOffset > 0)
+                if (animationOffset > 0)
                 {
                     long pos = br.Position;
-                    br.Position = animDataOffset;
-                    Frames = new Animation(br);
+                    br.Position = animationOffset;
+                    Animation = new NodeAnimation(br);
                     br.Position = pos;
                 }
             }
 
             /// <summary>
-            /// Serializes the <see cref="Bone"/> to a stream.
+            /// Write this <see cref="Node"/> to a stream.
             /// </summary>
-            internal void Write(BinaryWriterEx bw, int index)
+            /// <param name="bw">The stream writer.</param>
+            /// <param name="nodeIndex">The index of the <see cref="Node"/>.</param>
+            internal void Write(BinaryWriterEx bw, int nodeIndex)
             {
-                bw.ReserveInt32($"BoneNameOffset_{index}");
+                bw.ReserveInt32($"NodeNameOffset_{nodeIndex}");
                 bw.WriteInt32((int)Type);
-                bw.WriteInt16(BoneIndex);
+                bw.WriteInt16((short)nodeIndex);
                 bw.WriteInt16(GeomIndex);
                 bw.WriteInt16(ParentIndex);
-                bw.WriteInt16(ChildIndex);
+                bw.WriteInt16(FirstChildIndex);
                 bw.WriteInt16(NextSiblingIndex);
                 bw.WriteInt16(UnkIndex12);
                 bw.WriteVector3(Translation);
                 bw.WriteVector3(Rotation);
                 bw.WriteVector3(Scale);
-                if (Frames != null)
-                    bw.ReserveInt32($"AnimationOffset_{index}");
+                if (Animation != null)
+                    bw.ReserveInt32($"AnimationOffset_{nodeIndex}");
+                else
+                    bw.WriteInt32(0);
 
-                bw.WritePattern(184, 0);
+                bw.WritePattern(184, 0); // TODO: Unknown data offset 4 bytes into  this
             }
 
             /// <summary>
-            /// A group of frame information for a bone.
+            /// A collection of <see cref="Frame"/> objects to represent <see cref="Node"/> transformation over time.
             /// </summary>
-            public class Animation
+            public class NodeAnimation
             {
                 /// <summary>
-                /// Unknown, seems to determine whether position and rotation indices are present, and in how many bytes.
+                /// The format <see cref="Frame"/> data is stored in.
                 /// </summary>
-                public enum AnimationType : int
+                public enum FrameFormat : int
                 {
                     /// <summary>
-                    /// Position and rotation indices stored as bytes.
+                    /// Translation and rotation indices stored as bytes.
                     /// </summary>
                     PosRotBytes = 1,
 
                     /// <summary>
-                    /// Position and rotation indices stored as shorts.
+                    /// Translation and rotation indices stored as shorts.
                     /// </summary>
                     PosRotShorts = 2,
 
@@ -366,60 +375,61 @@ namespace SoulsFormats
                 }
 
                 /// <summary>
-                /// Unknown, seems to determine whether position and rotation indices are present, and in how many bytes.
+                /// The format of the stored <see cref="Frame"/> data.
                 /// </summary>
-                public AnimationType Type { get; set; }
+                public FrameFormat Format { get; set; }
 
                 /// <summary>
-                /// Unknown; A rotation of some kind, usually the same as the rotation of the bone that owns it.
+                /// Unknown; A rotation of some kind, usually the same as the rotation of the <see cref="Node"/> that owns it.
                 /// </summary>
                 public Vector3 Unk10 { get; set; }
 
                 /// <summary>
-                /// Unknown; A rotation of some kind, usually the same as the rotation of the bone that owns it.
+                /// Unknown; A rotation of some kind, usually the same as the rotation of the <see cref="Node"/> that owns it.
                 /// </summary>
                 public Vector3 Unk20 { get; set; }
 
                 /// <summary>
-                /// The key frames in this <see cref="Animation"/>.
+                /// The key frames in this <see cref="NodeAnimation"/>.
                 /// </summary>
                 public List<Frame> Frames { get; set; }
 
                 /// <summary>
-                /// Create a new <see cref="Animation"/>.
+                /// Creates a new <see cref="NodeAnimation"/>.
                 /// </summary>
-                public Animation()
+                public NodeAnimation()
                 {
-                    Type = AnimationType.PosRotShorts;
+                    Format = FrameFormat.PosRotShorts;
                     Frames = new List<Frame>();
                 }
 
                 /// <summary>
-                /// Create a new <see cref="Animation"/>.
+                /// Creates a new <see cref="NodeAnimation"/>.
                 /// </summary>
-                public Animation(int frameCount)
+                public NodeAnimation(int frameCount)
                 {
-                    Type = AnimationType.PosRotShorts;
+                    Format = FrameFormat.PosRotShorts;
                     Frames = new List<Frame>(frameCount);
                 }
 
                 /// <summary>
-                /// Create a new <see cref="Animation"/>.
+                /// Creates a new <see cref="NodeAnimation"/>.
                 /// </summary>
-                public Animation(AnimationType animationType, int frameCount)
+                public NodeAnimation(FrameFormat animationType, int frameCount)
                 {
-                    Type = animationType;
+                    Format = animationType;
                     Frames = new List<Frame>(frameCount);
                 }
 
                 /// <summary>
-                /// Deserializes a <see cref="Animation"/> from a stream.
+                /// Reads a <see cref="NodeAnimation"/> from a stream.
                 /// </summary>
-                internal Animation(BinaryReaderEx br)
+                /// <param name="br">The stream reader.</param>
+                internal NodeAnimation(BinaryReaderEx br)
                 {
                     int framesOffset = br.ReadInt32();
                     int frameCount = br.ReadInt32();
-                    Type = br.ReadEnum32<AnimationType>();
+                    Format = br.ReadEnum32<FrameFormat>();
                     Unk10 = br.ReadVector3();
                     Unk20 = br.ReadVector3();
                     br.AssertInt32(0);
@@ -427,69 +437,70 @@ namespace SoulsFormats
                     br.Position = framesOffset;
                     Frames = new List<Frame>(frameCount);
                     for (int i = 0; i < frameCount; i++)
-                        Frames.Add(new Frame(br, Type));
+                        Frames.Add(new Frame(br, Format));
                 }
 
                 /// <summary>
-                /// Serializes the <see cref="Animation"/> to a stream.
+                /// Writes this <see cref="NodeAnimation"/> to a stream.
                 /// </summary>
+                /// <param name="bw">The stream writer.</param>
                 internal void Write(BinaryWriterEx bw)
                 {
-                    bw.WriteInt32((int)bw.Position + 36);
+                    bw.WriteInt32((int)bw.Position + 36); // framesOffset
                     bw.WriteInt32(Frames.Count);
-                    bw.WriteInt32((int)Type);
+                    bw.WriteInt32((int)Format);
                     bw.WriteVector3(Unk10);
                     bw.WriteVector3(Unk20);
                     bw.WriteInt32(0);
 
                     foreach (var frame in Frames)
-                        frame.Write(bw, Type);
+                        frame.Write(bw, Format);
                 }
 
                 /// <summary>
-                /// Information on a frame.
+                /// A transformation in a point of time.
                 /// </summary>
                 public class Frame
                 {
                     /// <summary>
-                    /// The key frame this information is for.
+                    /// The point in time this <see cref="Frame"/> represents.
                     /// </summary>
                     public short KeyFrame { get; set; }
 
                     /// <summary>
-                    /// The index of the position in the positions array.
+                    /// The translation index.
                     /// </summary>
-                    public short PositionIndex { get; set; }
+                    public short TranslationIndex { get; set; }
 
                     /// <summary>
-                    /// An unknown index.
+                    /// The translation in-tangent index for cublic-spline animation sampling.
                     /// </summary>
-                    public short UnkIndex2 { get; set; }
+                    public short TranslationInTangentIndex { get; set; }
 
                     /// <summary>
-                    /// An unknown index.
+                    /// The translation out-tangent index for cublic-spline animation sampling.
                     /// </summary>
-                    public short UnkIndex3 { get; set; }
+                    public short TranslationOutTangentIndex { get; set; }
 
                     /// <summary>
-                    /// The index of the rotation in the rotations array.
+                    /// The rotation index.
                     /// </summary>
                     public short RotationIndex { get; set; }
 
                     /// <summary>
-                    /// An unknown index.
+                    /// The rotation in-tangent index for cublic-spline animation sampling.
                     /// </summary>
-                    public short UnkIndex5 { get; set; }
+                    public short RotationInTangentIndex { get; set; }
 
                     /// <summary>
-                    /// An unknown index.
+                    /// The rotation out-tangent index for cublic-spline animation sampling.
                     /// </summary>
-                    public short UnkIndex6 { get; set; }
+                    public short RotationOutTangentIndex { get; set; }
 
                     /// <summary>
-                    /// An unknown index.
+                    /// Unknown; Scale index?
                     /// </summary>
-                    public short UnkIndex7 { get; set; }
+                    public short UnkIndex { get; set; }
 
                     /// <summary>
                     /// Create a new <see cref="Frame"/>.
@@ -508,100 +519,144 @@ namespace SoulsFormats
                     }
 
                     /// <summary>
-                    /// Serializes the <see cref="Frame"/> to a stream.
+                    /// Reads a <see cref="Frame"/> from a stream.
                     /// </summary>
-                    internal Frame(BinaryReaderEx br, AnimationType animationType)
+                    /// <param name="br">The stream reader.</param>
+                    /// <param name="format">The <see cref="FrameFormat"/>.</param>
+                    /// <exception cref="NotImplementedException">The <see cref="FrameFormat"/> was not implemented.</exception>
+                    internal Frame(BinaryReaderEx br, FrameFormat format)
                     {
                         KeyFrame = br.ReadInt16();
-                        switch (animationType)
+                        switch (format)
                         {
-                            case AnimationType.PosRotBytes:
-                                PositionIndex = br.ReadByte();
-                                UnkIndex2 = br.ReadByte();
-                                UnkIndex3 = br.ReadByte();
+                            case FrameFormat.PosRotBytes:
+                                TranslationIndex = br.ReadByte();
+                                TranslationInTangentIndex = br.ReadByte();
+                                TranslationOutTangentIndex = br.ReadByte();
                                 RotationIndex = br.ReadByte();
-                                UnkIndex5 = br.ReadByte();
-                                UnkIndex6 = br.ReadByte();
-                                UnkIndex7 = -1;
+                                RotationInTangentIndex = br.ReadByte();
+                                RotationOutTangentIndex = br.ReadByte();
+                                UnkIndex = 1;
                                 break;
-                            case AnimationType.PosRotShorts:
-                                PositionIndex = br.ReadInt16();
-                                UnkIndex2 = br.ReadInt16();
-                                UnkIndex3 = br.ReadInt16();
+                            case FrameFormat.PosRotShorts:
+                                TranslationIndex = br.ReadInt16();
+                                TranslationInTangentIndex = br.ReadInt16();
+                                TranslationOutTangentIndex = br.ReadInt16();
                                 RotationIndex = br.ReadInt16();
-                                UnkIndex5 = br.ReadInt16();
-                                UnkIndex6 = br.ReadInt16();
-                                UnkIndex7 = br.ReadInt16();
+                                RotationInTangentIndex = br.ReadInt16();
+                                RotationOutTangentIndex = br.ReadInt16();
+                                UnkIndex = br.ReadInt16();
                                 break;
-                            case AnimationType.RotShorts:
-                                PositionIndex = -1;
-                                UnkIndex2 = -1;
-                                UnkIndex3 = -1;
+                            case FrameFormat.RotShorts:
+                                TranslationIndex = -1;
+                                TranslationInTangentIndex = -1;
+                                TranslationOutTangentIndex = -1;
                                 RotationIndex = br.ReadInt16();
-                                UnkIndex5 = br.ReadInt16();
-                                UnkIndex6 = br.ReadInt16();
-                                UnkIndex7 = -1;
+                                RotationInTangentIndex = br.ReadInt16();
+                                RotationOutTangentIndex = br.ReadInt16();
+                                UnkIndex = 1;
                                 break;
                             default:
-                                throw new NotImplementedException($"AnimType \"{animationType}\" has not been implemented in index reading.");
+                                throw new NotImplementedException($"{nameof(FrameFormat)} \"{format}\" has not been implemented.");
                         }
                     }
 
                     /// <summary>
-                    /// Write FrameData to a stream.
+                    /// Write this <see cref="Frame"/> to a stream.
                     /// </summary>
-                    /// <param name="bw">A BinaryWriterEx.</param>
-                    /// <param name="animationType">The animation type.</param>
-                    internal void Write(BinaryWriterEx bw, AnimationType animationType)
+                    /// <param name="bw">The stream writer.</param>
+                    /// <param name="format">The <see cref="FrameFormat"/>.</param>
+                    /// <exception cref="NotImplementedException">The <see cref="FrameFormat"/> was not implemented.</exception>
+                    internal void Write(BinaryWriterEx bw, FrameFormat format)
                     {
                         bw.WriteInt32(KeyFrame);
-                        switch (animationType)
+                        switch (format)
                         {
-                            case AnimationType.PosRotBytes:
-                                bw.WriteByte((byte)PositionIndex);
-                                bw.WriteByte((byte)UnkIndex2);
-                                bw.WriteByte((byte)UnkIndex3);
+                            case FrameFormat.PosRotBytes:
+                                bw.WriteByte((byte)TranslationIndex);
+                                bw.WriteByte((byte)TranslationInTangentIndex);
+                                bw.WriteByte((byte)TranslationOutTangentIndex);
                                 bw.WriteByte((byte)RotationIndex);
-                                bw.WriteByte((byte)UnkIndex5);
-                                bw.WriteByte((byte)UnkIndex6);
+                                bw.WriteByte((byte)RotationInTangentIndex);
+                                bw.WriteByte((byte)RotationOutTangentIndex);
                                 break;
-                            case AnimationType.PosRotShorts:
-                                bw.WriteInt16(PositionIndex);
-                                bw.WriteInt16(UnkIndex2);
-                                bw.WriteInt16(UnkIndex3);
+                            case FrameFormat.PosRotShorts:
+                                bw.WriteInt16(TranslationIndex);
+                                bw.WriteInt16(TranslationInTangentIndex);
+                                bw.WriteInt16(TranslationOutTangentIndex);
                                 bw.WriteInt16(RotationIndex);
-                                bw.WriteInt16(UnkIndex5);
-                                bw.WriteInt16(UnkIndex6);
-                                bw.WriteInt16(UnkIndex7);
+                                bw.WriteInt16(RotationInTangentIndex);
+                                bw.WriteInt16(RotationOutTangentIndex);
+                                bw.WriteInt16(UnkIndex);
                                 break;
-                            case AnimationType.RotShorts:
+                            case FrameFormat.RotShorts:
                                 bw.WriteInt16(RotationIndex);
-                                bw.WriteInt16(UnkIndex5);
-                                bw.WriteInt16(UnkIndex6);
+                                bw.WriteInt16(RotationInTangentIndex);
+                                bw.WriteInt16(RotationOutTangentIndex);
                                 break;
                             default:
-                                throw new NotImplementedException($"AnimType \"{animationType}\" has not been implemented in index writing.");
+                                throw new NotImplementedException($"{nameof(FrameFormat)} \"{format}\" has not been implemented.");
                         }
                     }
 
                     /// <summary>
-                    /// Get the position of this frame.
+                    /// Get the in-tangent translation of this <see cref="Frame"/>.
                     /// </summary>
-                    /// <param name="positions">The positions array from the ANI itself.</param>
-                    /// <returns>The position of this frame.</returns>
-                    public Vector3 GetPosition(Vector3[] positions)
+                    /// <param name="translations">The positions array from the <see cref="ANI"/> itself.</param>
+                    /// <returns>The in-tangent of the translation of this <see cref="Frame"/>.</returns>
+                    public Vector3 GetTranslationInTangent(List<Vector3> translations)
                     {
-                        return positions[PositionIndex];
+                        return translations[TranslationInTangentIndex];
                     }
 
                     /// <summary>
-                    /// Get the rotation of this frame.
+                    /// Get the translation of this <see cref="Frame"/>.
                     /// </summary>
-                    /// <param name="rotations">The rotations array from the ANI itself.</param>
-                    /// <returns>The rotation of this frame.</returns>
-                    public Vector3 GetRotation(Vector3[] rotations)
+                    /// <param name="translations">The positions array from the <see cref="ANI"/> itself.</param>
+                    /// <returns>The translation of this <see cref="Frame"/>.</returns>
+                    public Vector3 GetTranslation(List<Vector3> translations)
+                    {
+                        return translations[TranslationIndex];
+                    }
+
+                    /// <summary>
+                    /// Get the out-tangent of the translation of this <see cref="Frame"/>.
+                    /// </summary>
+                    /// <param name="translations">The positions array from the <see cref="ANI"/> itself.</param>
+                    /// <returns>The out-tangent of the translation of this <see cref="Frame"/>.</returns>
+                    public Vector3 GetTranslationOutTangent(List<Vector3> translations)
+                    {
+                        return translations[TranslationOutTangentIndex];
+                    }
+
+                    /// <summary>
+                    /// Get the in-tangent of the rotation of this <see cref="Frame"/>.
+                    /// </summary>
+                    /// <param name="rotations">The rotations array from the <see cref="ANI"/> itself.</param>
+                    /// <returns>The in-tangent rotation of this <see cref="Frame"/>.</returns>
+                    public Vector3 GetRotationInTangent(List<Vector3> rotations)
+                    {
+                        return rotations[RotationInTangentIndex];
+                    }
+
+                    /// <summary>
+                    /// Get the rotation of this <see cref="Frame"/>.
+                    /// </summary>
+                    /// <param name="rotations">The rotations array from the <see cref="ANI"/> itself.</param>
+                    /// <returns>The rotation of this <see cref="Frame"/>.</returns>
+                    public Vector3 GetRotation(List<Vector3> rotations)
                     {
                         return rotations[RotationIndex];
+                    }
+
+                    /// <summary>
+                    /// Get the out-tangent of the rotation of this <see cref="Frame"/>.
+                    /// </summary>
+                    /// <param name="rotations">The rotations array from the <see cref="ANI"/> itself.</param>
+                    /// <returns>The out-tangent of the rotation of this <see cref="Frame"/>.</returns>
+                    public Vector3 GetRotationOutTangent(List<Vector3> rotations)
+                    {
+                        return rotations[RotationOutTangentIndex];
                     }
                 }
             }

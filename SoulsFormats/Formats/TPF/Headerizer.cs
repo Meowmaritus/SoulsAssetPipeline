@@ -25,12 +25,14 @@ namespace SoulsFormats
           6 - B5G5R5A1_UNORM
           9 - B8G8R8A8
          10 - R8G8B8 on PC, A8G8B8R8 on PS3
-         16 - A8
+         16 - A8 swizzled on PS3
          22 - A16B16G16R16f
          23 - DXT5
          24 - BC4
          25 - DXT1
+         26 - 8-bit pallette indices per pixel, swizzled on PS3
          33 - DXT5
+         36 - BC5
         100 - BC6H_UF16
         102 - BC7_UNORM
         103 - ATI1
@@ -63,8 +65,10 @@ namespace SoulsFormats
             [23] = DXGI_FORMAT.BC3_UNORM,
             [24] = DXGI_FORMAT.BC4_UNORM,
             [25] = DXGI_FORMAT.BC1_UNORM,
+            [26] = DXGI_FORMAT.A8_UNORM,
             [29] = DXGI_FORMAT.BC1_UNORM,
             [33] = DXGI_FORMAT.BC3_UNORM,
+            [36] = DXGI_FORMAT.BC5_UNORM,
             [100] = DXGI_FORMAT.BC6H_UF16,
             [102] = DXGI_FORMAT.BC7_UNORM,
             [103] = DXGI_FORMAT.BC4_UNORM,
@@ -94,6 +98,7 @@ namespace SoulsFormats
             [25] = 8,
             [29] = 8,
             [33] = 16,
+            [36] = 16,
             [100] = 16,
             [102] = 16,
             [103] = 8,
@@ -119,6 +124,7 @@ namespace SoulsFormats
             [10] = 4,
             [16] = 1,
             [22] = 8,
+            [26] = 1,
             [105] = 4,
         };
 
@@ -150,12 +156,45 @@ namespace SoulsFormats
         private static byte[] DX10Formats = { 6, 100, 102, 106, 107, 112, 113, 115 };
 
         /// <summary>
-        /// By default, we'll assume no swizzling, PC type. Bear in mind Demon's Souls and Dark Souls 1 do NOT use PS3 swizzling and should be assigned 'PC'!
+        /// *Deprecated handling* 
+        /// Please use Headerize overload with extension string
         /// </summary>
         public static byte[] Headerize(Texture texture)
         {
-            if (SFEncoding.ASCII.GetString(texture.Bytes, 0, 4) == "DDS ")
+            var headerizedBytes = Headerize(texture, out string extension);
+            if (extension != ".dds")
+            {
+                throw new Exception($"File is type {extension}, please retrieve extension string from the newer method!");
+            }
+
+            return headerizedBytes;
+        }
+
+        /// <summary>
+        /// By default, we'll assume no swizzling, PC type. Bear in mind Demon's Souls and Dark Souls 1 do NOT use PS3 swizzling and should be assigned 'PC'!
+        /// </summary>
+        public static byte[] Headerize(Texture texture, out string extension)
+        {
+            extension = ".dds";
+
+            var potentialMagic = SFEncoding.ASCII.GetString(texture.Bytes, 0, 4);
+            if (potentialMagic == "DDS ")
                 return texture.Bytes;
+            else if (potentialMagic == "GNF ")
+            {
+                extension = ".gnf";
+                return texture.Bytes;
+            }
+            else if (potentialMagic == "DFvN")
+            {
+                extension = ".xtx";
+                return texture.Bytes;
+            }
+
+            if (texture.Header.DXGIFormat == (int)DXGI_FORMAT.UNKNOWN)
+            {
+                throw new InvalidOperationException($"Cannot headerize texture with unknown {nameof(DXGI_FORMAT)}.");
+            }
 
             var dds = new DDS();
             byte format = texture.Format;
@@ -292,7 +331,7 @@ namespace SoulsFormats
                 if (type == TPF.TexType.Cubemap)
                     dds.header10.miscFlag = RESOURCE_MISC.TEXTURECUBE;
             }
-            var images = RebuildPixelData(texture.Bytes, (DXGI_FORMAT)texture.Header.DXGIFormat, width, height, depth, mipCount, type, texture.Platform);
+            var images = RebuildPixelData(texture.Bytes, (DXGI_FORMAT)texture.Header.DXGIFormat, width, height, depth, mipCount, type, texture.Platform, texture.Format);
 
             //Failsafe for if whatever reason we don't read all of the mipmaps
             if (images.Count > 0)
@@ -316,9 +355,9 @@ namespace SoulsFormats
             return (int)Math.Ceiling(Math.Log(Math.Max(width, height), 2)) + 1;
         }
 
-        private static List<Image> RebuildPixelData(byte[] bytes, DXGI_FORMAT dxgiFormat, short width, short height, int depth, int mipCount, TPF.TexType type, TPFPlatform platform)
+        private static List<Image> RebuildPixelData(byte[] bytes, DXGI_FORMAT dxgiFormat, short width, short height, int depth, int mipCount, TPF.TexType type, TPFPlatform platform, byte format)
         {
-            List<Image> images = ReadImages(platform, bytes, width, height, depth, mipCount, dxgiFormat, type);
+            List<Image> images = ReadImages(platform, bytes, width, height, depth, mipCount, dxgiFormat, type, format);
 
             return images;
         }
@@ -328,7 +367,7 @@ namespace SoulsFormats
             return Math.Max((int)Math.Ceiling(value / (float)pad) * pad, pad);
         }
 
-        private static List<Image> ReadImages(TPFPlatform platform, byte[] bytes, int width, int height, int depth, int mipCount, DXGI_FORMAT dxgiFormat, TPF.TexType type)
+        private static List<Image> ReadImages(TPFPlatform platform, byte[] bytes, int width, int height, int depth, int mipCount, DXGI_FORMAT dxgiFormat, TPF.TexType type, byte format)
         {
             switch (platform)
             {
@@ -337,15 +376,16 @@ namespace SoulsFormats
                 case TPFPlatform.Xbone:
                     throw new NotImplementedException();
                 case TPFPlatform.PS3:
-                    return ReadPS3Images(new BinaryReaderEx(false, bytes), width, height, depth, mipCount, dxgiFormat);
+                    return ReadPS3Images(new BinaryReaderEx(false, bytes), width, height, depth, mipCount, dxgiFormat, format);
                 case TPFPlatform.PS4:
                     return ReadPS4Images(new BinaryReaderEx(false, bytes), width, height, depth, mipCount, dxgiFormat, type);
                 case TPFPlatform.PS5:
                     return ReadPS5Images(new BinaryReaderEx(false, bytes), width, height, depth, mipCount, dxgiFormat);
                 case TPFPlatform.PC:
+                case TPFPlatform.Switch:
                 default:
                     //Similar to original SF behavior, probably not necessary.
-                    return ReadPS3Images(new BinaryReaderEx(false, bytes), width, height, depth, mipCount, dxgiFormat);
+                    return ReadPS3Images(new BinaryReaderEx(false, bytes), width, height, depth, mipCount, dxgiFormat, format);
             }
         }
 
@@ -382,14 +422,22 @@ namespace SoulsFormats
                     image.subImages.Add(mip);
 
                     //Skip all but the first mip unless someone wants to finish it offer more properly.
-                    break;
+                    //break;
                 }
                 images.Add(image);
             }
             return images;
         }
+        /*
+        /// <summary>
+        /// Based on https://github.com/xenia-canary/xenia-canary/blob/15008ccecc495fb52d6c66cea0d48b71e19032c1/src/xenia/gpu/texture_util.cc#L108
+        /// </summary>
+        private static bool GetPackedMipOffset(int width, int height, int depth, )
+        {
 
-        private static List<Image> ReadPS3Images(BinaryReaderEx br, int finalWidth, int finalHeight, int depth, int mipCount, DXGI_FORMAT dxgiFormat)
+        }*/
+
+        private static List<Image> ReadPS3Images(BinaryReaderEx br, int finalWidth, int finalHeight, int depth, int mipCount, DXGI_FORMAT dxgiFormat, byte format)
         {
             var pixelFormat = (DrSwizzler.DDS.DXEnums.DXGIFormat)dxgiFormat;
             DrSwizzler.Util.GetsourceBytesPerPixelSetAndPixelSize(pixelFormat, out int sourceBytesPerPixelSet, out int pixelBlockSize, out int formatBpp);
@@ -412,7 +460,10 @@ namespace SoulsFormats
                     }
 
                     byte[] mip = br.ReadBytes((int)calculatedBufferLength);
-                    if (dxgiFormat == DXGI_FORMAT.R8G8B8A8_UNORM)
+                    if (dxgiFormat == DXGI_FORMAT.R8G8B8A8_UNORM ||
+                        format == 9 ||
+                        format == 16 ||
+                        format == 26)
                     {
                         mip = DrSwizzler.Deswizzler.PS3Deswizzle(mip, w, h, pixelFormat);
                     }
@@ -423,19 +474,54 @@ namespace SoulsFormats
             return images;
         }
 
-        public static byte[] WritePS3Images(List<Image> images)
+        public static byte[] WritePS3Images(List<Image> images, DDS ddsHeader, byte format)
         {
-            var bw = new BinaryWriterEx(false);
+            int maxMipCount = 0;
             foreach (var img in images)
             {
-                bw.Pad(0x80);
-                foreach (var mip in img.subImages)
+                maxMipCount = Math.Max(img.subImages.Count, maxMipCount);
+            }
+
+            DrSwizzler.Util.GetsourceBytesPerPixelSetAndPixelSize((DrSwizzler.DDS.DXEnums.DXGIFormat)ddsHeader.GetDXGIFormat(), out _, out int pixelBlockSize, out int formatBpp);
+            int minBLockDimension = 8 * pixelBlockSize;
+            int minDimension = pixelBlockSize;
+
+            var bw = new BinaryWriterEx(false);
+            var pixelFormat = ddsHeader.GetDXGIFormat();
+            int width = ddsHeader.dwWidth;
+            int height = ddsHeader.dwHeight;
+            for (int m = 0; m < maxMipCount; m++)
+            {
+                var bufferLengthMin = GetDeswizzleSize(formatBpp, width, height, minBLockDimension, out _, out _);
+                foreach (var img in images)
                 {
-                    bw.WriteBytes(mip);
+                    if (img.subImages.Count <= m)
+                        continue;
+
+                    bw.Pad(0x80);
+                    var buffer = img.subImages[m];
+                    if (pixelFormat == DXGI_FORMAT.R8G8B8A8_UNORM ||
+                        format == 9 ||
+                        format == 16 ||
+                        format == 26)
+                    {
+                        buffer = DrSwizzler.Swizzler.PS3Swizzle(buffer, width, height, (DrSwizzler.DDS.DXEnums.DXGIFormat)pixelFormat, (int)bufferLengthMin);
+                    }
+
+                    bw.WriteBytes(buffer);
+
+                    // Pad out mipmap buffers as needed
+                    if (buffer.Length < bufferLengthMin)
+                    {
+                        bw.WritePattern((int)bufferLengthMin - buffer.Length, 0);
+                    }
                 }
+
+                GetNextMipDimensions(minDimension, ref width, ref height);
             }
 
             return bw.FinishBytes();
+
         }
 
         private static List<Image> ReadPS4Images(BinaryReaderEx br, int finalWidth, int finalHeight, int depth, int mipCount, DXGI_FORMAT dxgiFormat, TPF.TexType type)
@@ -745,11 +831,19 @@ namespace SoulsFormats
                     var imageSize = fullImageSize;
                     for (int i = 0; i < depth; i++)
                     {
-                        img.subImages.Add(br.ReadBytes((int)imageSize));
-                        imageSize /= 4;
-                        if (imageSize < sourceBytesPerPixelSet)
+                        if(br.Position + imageSize <= br.Length)
                         {
-                            imageSize = sourceBytesPerPixelSet;
+                            img.subImages.Add(br.ReadBytes((int)imageSize));
+                            imageSize /= 4;
+                            if (imageSize < sourceBytesPerPixelSet)
+                            {
+                                imageSize = sourceBytesPerPixelSet;
+                            }
+                        }
+                        else
+                        {
+                            //Fix mipmapcount if we have to
+                            ddsHeader.dwMipMapCount = m;
                         }
                     }
 
@@ -781,11 +875,18 @@ namespace SoulsFormats
                     var imageSize = fullImageSize;
                     for (int m = 0; m < ddsHeader.dwMipMapCount; m++)
                     {
-                        img.subImages.Add(br.ReadBytes((int)imageSize));
-                        imageSize /= 4;
-                        if (imageSize < sourceBytesPerPixelSet)
+                        if(br.Position + imageSize <= br.Length)
                         {
-                            imageSize = sourceBytesPerPixelSet;
+                            img.subImages.Add(br.ReadBytes((int)imageSize));
+                            imageSize /= 4;
+                            if (imageSize < sourceBytesPerPixelSet)
+                            {
+                                imageSize = sourceBytesPerPixelSet;
+                            }
+                        } else
+                        {
+                            //Fix mipmapcount if we have to
+                            ddsHeader.dwMipMapCount = m;
                         }
                     }
                     imageList.Add(img);

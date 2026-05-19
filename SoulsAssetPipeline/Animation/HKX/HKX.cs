@@ -121,7 +121,7 @@ namespace SoulsAssetPipeline.Animation
                 file.IsDS1RAnimHotfix = isDS1RAnimHotfix;
                 file.Variation = variation;
                 file.DeserializeObjects = deserializeObjects;
-                br = SFUtil.GetDecompressedBinaryReader(br, out DCX.Type fileCompression);
+                br = SFUtil.GetDecompressedBinaryReader(br, out DCX.CompressionInfo fileCompression);
                 file.Compression = fileCompression;
                 file.Read(br);
                 return file;
@@ -135,7 +135,7 @@ namespace SoulsAssetPipeline.Animation
             file.IsDS1RAnimHotfix = isDS1RAnimHotfix;
             file.Variation = variation;
             file.DeserializeObjects = deserializeObjects;
-            br = SFUtil.GetDecompressedBinaryReader(br, out DCX.Type fileCompression);
+            br = SFUtil.GetDecompressedBinaryReader(br, out DCX.CompressionInfo fileCompression);
             file.Compression = fileCompression;
             file.Read(br);
             return file;

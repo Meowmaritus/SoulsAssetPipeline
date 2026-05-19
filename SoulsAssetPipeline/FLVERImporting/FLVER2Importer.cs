@@ -198,10 +198,10 @@ namespace SoulsAssetPipeline.FLVERImporting
                         string texPath = Path.GetFullPath(slot.FilePath);
                         string texName = Path.GetFileNameWithoutExtension(texPath);
 
-                        flverMaterial.Textures.Add(new FLVER2.Texture(type: ingameSlot,
+                        flverMaterial.Textures.Add(new FLVER2.Texture(paramName: ingameSlot,
                         path: slot.FilePath != null ? $"N:\\FRPG\\data\\FakePath\\{texName}.dds" : "",
-                        scale: System.Numerics.Vector2.One,
-                            1, true, 0, 0, 0));
+                        tilingScale: System.Numerics.Vector2.One,
+                            FLVER2.Texture.TilingType.Repeat, FLVER2.Texture.TilingType.Repeat, 0, 0, 0));
 
 
                         byte[] texData = null;// scene.GetEmbeddedTexture(slot.FilePath)?.CompressedData;
@@ -235,10 +235,10 @@ namespace SoulsAssetPipeline.FLVERImporting
                             AddTextureSlot(material.TextureEmissive, kvp.Value);
                         else
                         {
-                            flverMaterial.Textures.Add(new FLVER2.Texture(type: kvp.Value,
+                            flverMaterial.Textures.Add(new FLVER2.Texture(paramName: kvp.Value,
                                 path: string.Empty,
-                                scale: System.Numerics.Vector2.One,
-                                0, false, 0, 0, 0));
+                                tilingScale: System.Numerics.Vector2.One,
+                                tilingTypeU: FLVER2.Texture.TilingType.Repeat, tilingTypeV: FLVER2.Texture.TilingType.Repeat, 0, 0, 0));
                         }
                     }
                 }

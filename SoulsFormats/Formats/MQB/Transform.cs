@@ -1,5 +1,4 @@
 ﻿using System.Numerics;
-using SoulsFormats;
 
 namespace SoulsFormats
 {
